@@ -23,11 +23,18 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-from sap_cloud_sdk.agentgateway import create_client
 from pydantic import create_model
 from langchain_core.tools import StructuredTool
 
 from util import enhance_tool_description, enhance_tool_name, call_mcp_tool_with_retry
+
+# sap_cloud_sdk only available on Joule runtime — lazy import in get_mcp_tools()
+try:
+    from sap_cloud_sdk.agentgateway import create_client as _create_client
+    _SAP_SDK_AVAILABLE = True
+except ImportError:
+    _create_client = None
+    _SAP_SDK_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +204,7 @@ async def get_mcp_tools(use_cache: bool = True) -> list:
 
     try:
         # Create Agent Gateway client directly
-        agw_client = create_client()
+        agw_client = _create_client()
         logger.info("Agent Gateway client created successfully")
 
         # Get MCP tools from Agent Gateway
