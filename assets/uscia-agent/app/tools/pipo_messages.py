@@ -16,11 +16,25 @@ async def get_pipo_message_status(
     return {
         "status": "MISSING_DATA",
         "system": "SAP_PIPO",
-        "guidance": (
-            "Check PI/PO message monitoring in SXMB_MONI (transaction SXMB_MONI) "
-            "or the Runtime Workbench (RWB). "
-            "Filter by sender interface for IBP/RTI integration. "
+        "reason": (
+            "SAP PI/PO (Process Integration / Process Orchestration) is not connected "
+            "to USCIA. This tool is a planned stub for landscapes that use legacy PI/PO "
+            "middleware alongside or instead of SAP Integration Suite (CPI). "
+            "Live PI/PO monitoring will be wired in Phase 2 if your landscape uses PI/PO."
+        ),
+        "what_was_expected": (
+            "PI/PO message flow records for the IBP → S/4HANA integration channel "
+            f"between {date_from} and {date_to}. "
+            "Failed messages here would explain why planned orders or demand signals "
+            "did not transfer between IBP and S/4HANA in legacy integration landscapes."
+        ),
+        "manual_investigation": (
+            "RIGHT NOW — Open transaction SXMB_MONI in PI/PO system, or the "
+            "Runtime Workbench (RWB) → Component Monitoring → Integration Engine. "
             f"Date range: {date_from} to {date_to}. "
-            "Check for FAILED or CANCELLED message status in the integration channel."
+            "Filter by sender interface for IBP or RTI. "
+            "Look for status FAILED or SYSERR. "
+            "If your landscape uses CPI (not PI/PO), check SAP Integration Suite "
+            "Message Monitor instead — CPI data is also currently a stub (Phase 2)."
         ),
     }

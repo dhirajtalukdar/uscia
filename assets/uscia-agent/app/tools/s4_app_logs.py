@@ -63,11 +63,29 @@ async def get_application_logs(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": (
-                f"Check application logs in SLG1 (transaction SLG1). "
-                f"Filter by object: MPLANORD (MRP planned orders), APOCIF (CIF transfer), "
-                f"or MRP_PP_DS (PP/DS scheduling). "
+            "reason": (
+                f"S/4HANA Application Logs API (APL_LOG_MANAGEMENT_SRV) returned an error "
+                f"for material {material} / plant {plant}. "
+                f"The S/4HANA system may be temporarily unreachable, the service may not be "
+                "activated on this system, or the API user may lack the required authorisation "
+                "object S_APPL_LOG."
+            ),
+            "what_was_expected": (
+                f"Application log headers from SLG1 for supply chain objects: "
+                "MPLANORD (MRP planned order creation/deletion errors), "
+                "APOCIF (CIF transfer failures between S/4HANA and IBP/PP/DS), "
+                f"MRP_PP_DS (PP/DS scheduling and heuristic run errors). "
                 f"Date range: {date_from} to {date_to}. "
-                f"Material: {material}, Plant: {plant}."
+                "These logs directly record which MRP or CIF steps failed and why."
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — Run transaction SLG1 in S/4HANA. "
+                f"Object: MPLANORD (for planned order errors) or APOCIF (for CIF/IBP transfer issues) "
+                f"or MRP_PP_DS (for PP/DS scheduling failures). "
+                f"Date: {date_from} to {date_to}. "
+                f"Plant: {plant}, Material: {material}. "
+                "Severity: Error and Warning. "
+                "Error messages starting with M7 (inventory), M3 (MRP), or CIF* (integration) "
+                "are the most relevant for supply chain planning failures."
             ),
         }

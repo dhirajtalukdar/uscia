@@ -61,7 +61,33 @@ async def get_ibp_supply_data(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": _GUIDANCE.format(
-                version=planning_version, material=material, plant=plant
+            "reason": (
+                f"SAP IBP (Integrated Business Planning) Supply API failed for material "
+                f"{material} / plant {plant}. "
+                f"Error: {exc}. "
+                "API: SupplyChain_SupplyKeyFigure (IBP OData). The IBP system may be "
+                "unreachable, the IBP BTP Destination may be misconfigured, or the API "
+                "user lacks IBP supply planning authorisations."
+            ),
+            "what_was_expected": (
+                f"IBP supply planning key figures for material {material} / plant {plant}, "
+                f"planning version {planning_version} — including planned supply quantities, "
+                "planned order proposals from IBP heuristics, supply pegging to demand, "
+                "and EXTERNID mapping for RTI transfer to S/4HANA. "
+                "Zero supply here means IBP produced no plan, which explains why "
+                "no planned orders were transferred to S/4HANA via RTI."
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — Log into SAP IBP. "
+                f"Go to IBP Monitor → Supply Planning → Job Monitor. "
+                f"Check: (1) Was a supply planning run completed for version {planning_version} "
+                f"in the relevant time period? Status should be 'Completed'. "
+                f"(2) Go to Supply Planning → Supply Review for material {material}, "
+                f"location {plant} — does IBP show supply quantities? "
+                f"(3) Check EXTERNID assignment: material {material} must have an EXTERNID "
+                f"mapped to an S/4HANA product/location for RTI transfer to work. "
+                "If the supply plan exists in IBP but S/4HANA has no planned orders: "
+                "the RTI transfer failed — check CPI / SXMB_MONI for the IBP_RTI_TO_S4HANA "
+                "integration flow."
             ),
         }

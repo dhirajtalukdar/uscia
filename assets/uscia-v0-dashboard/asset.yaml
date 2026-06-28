@@ -1,0 +1,12 @@
+apiVersion: asset.sap/v1
+kind: Asset
+
+metadata:
+  name: uscia-v0-dashboard
+  version: 1.0.0
+
+type: vercel-app
+
+container:
+  buildPath: .
+  port: 5000

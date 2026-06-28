@@ -43,10 +43,12 @@ async def test_full_investigation_returns_14_sections():
          patch("evidence.collector.get_atp_check_result", AsyncMock(return_value=_missing("S4HANA_ATP"))), \
          patch("evidence.collector.get_application_logs", AsyncMock(return_value=_missing("S4HANA_APPLICATION_LOGS"))), \
          patch("evidence.collector.get_bgrfc_queue_status", AsyncMock(return_value=_missing("S4HANA_BGRFC_QUEUE"))), \
+         patch("evidence.collector.get_ppds_config_and_mrp_issues", AsyncMock(return_value=_missing("S4HANA_PPDS_CONFIG"))), \
          patch("evidence.collector.get_ibp_supply_data", AsyncMock(return_value=_missing("IBP_SUPPLY"))), \
          patch("evidence.collector.get_cpi_message_status", AsyncMock(return_value=_missing("CPI_RTI"))), \
          patch("evidence.collector.get_pipo_message_status", AsyncMock(return_value=_missing("PIPO"))), \
          patch("evidence.collector.get_cloud_alm_health_events", AsyncMock(return_value=_missing("CLOUD_ALM"))), \
+         patch("evidence.collector.get_bdc_supply_chain_analytics", AsyncMock(return_value=_missing("SAP_BDC"))), \
          patch("llm.narrator.narrate_findings", AsyncMock(return_value=mock_narration)), \
          patch("aicore.init_llm_from_destination", mock_llm_coro), \
          patch("agent.init_llm_from_destination", mock_llm_coro), \
@@ -71,7 +73,9 @@ async def test_full_investigation_returns_14_sections():
                 "test-context-001",
             )
 
-    assert isinstance(result, str)
-    assert len(result) > 100
+    # _run_agent now returns AgentResult; unwrap content for assertions
+    report_text = result.content if hasattr(result, "content") else result
+    assert isinstance(report_text, str)
+    assert len(report_text) > 100
     for _, header in _SECTIONS:
-        assert header in result, f"Missing section in integration test output: {header}"
+        assert header in report_text, f"Missing section in integration test output: {header}"

@@ -144,13 +144,35 @@ async def get_ppds_config_and_mrp_issues(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": (
-                f"Could not retrieve MRP issues / PP/DS config for material {material} plant {plant}. "
-                "Manual checks required: "
-                "1. MM02/MM03 -> MRP 2 tab -> Advanced Planning checkbox (MARC-MTVFP). "
-                "2. CIF Integration Model: CURTO_SIMU or /SAPAPO/CIF. "
-                "3. SMQ1: qRFC outbound queues (destination APOC*). "
-                "4. SLG1: object APOCIF for CIF transfer errors. "
-                "5. /SAPAPO/RRP3: PP/DS planning board."
+            "reason": (
+                f"S/4HANA PP/DS configuration API failed for material {material} / plant {plant}. "
+                f"Error: {exc}. "
+                "This API queries MM03 (MRP views), CIF integration model activation, "
+                "and SMQ1 queue status. The failure may indicate an S/4HANA connectivity "
+                "issue, missing authorisation for the API user, or a system performance problem."
+            ),
+            "what_was_expected": (
+                f"PP/DS and MRP configuration diagnostics for material {material} / plant {plant}: "
+                "(1) Whether Advanced Planning (PP/DS) is activated on the material master "
+                "(field MARC-MTVFP = 'X'). "
+                "(2) Whether the CIF integration model includes this material/plant "
+                "(active model in CURTO_SIMU). "
+                "(3) qRFC outbound queue status (SMQ1 — queues APOC* for CIF). "
+                "(4) Recent CIF transfer errors in SLG1 (object APOCIF). "
+                "These are the four most common configuration gaps that cause PP/DS not to "
+                "receive planned orders from IBP."
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — for material {material}, plant {plant}: "
+                "1. MM02/MM03 → MRP 2 tab → 'Advanced Planning' checkbox "
+                "(MARC-MTVFP field) — must be active for PP/DS to see the material. "
+                "2. Transaction CURTO_SIMU or /SAPAPO/CIF → check Active integration models "
+                "— this material/plant must be in at least one active model. "
+                "3. Transaction SMQ1 → filter destination APOC* — stuck queues here block "
+                "ALL transfers for the integration model, not just this material. "
+                "4. Transaction SLG1 → object APOCIF, subobject = plant → Error messages — "
+                "look for 'object not in integration model' or 'CIF transfer failed' messages. "
+                "5. Transaction /SAPAPO/RRP3 → search material/plant → if orders appear here "
+                "but not in S/4HANA, the bgRFC reverse transfer is stuck (check SM58)."
             ),
         }

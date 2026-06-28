@@ -13,3 +13,4 @@ metadata:
 assets:
   - ref: ./assets/uscia-agent/asset.yaml
   - ref: ./assets/uscia-dashboard/asset.yaml
+  - ref: ./assets/uscia-v0-dashboard/asset.yaml

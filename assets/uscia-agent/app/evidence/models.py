@@ -15,6 +15,14 @@ class InvestigationContext:
     date_to: str
     incident_type: str
     continuity_keys: dict = field(default_factory=dict)
+    # KG Grounding fields — populated at M1 by kg_grounding.ground_investigation_context()
+    # Carried through M2→M5 so narration layer can inject process context into the LLM prompt
+    kg_process_context: str = ""           # SAP RBA chain description for this incident type
+    kg_relevant_systems: list = field(default_factory=list)   # Priority system order from KG
+    kg_disambiguated_terms: dict = field(default_factory=dict) # SAP term → functional name map
+    kg_bp_ids: list = field(default_factory=list)              # e.g. ["BPS-327", "BPS-349"]
+    kg_confidence: str = ""                # HIGH (live KG) | MEDIUM | LOW (fallback)
+    kg_fallback_used: bool = True          # True = local fallback, False = live KG API
 
 
 @dataclass
@@ -24,6 +32,7 @@ class EvidenceNode:
     status: str          # AVAILABLE | MISSING_DATA
     raw_payload: Any = None
     manual_guidance: str = ""
+    kg_priority: bool = False   # True when system appears in KG-grounded relevant_systems list
 
 
 @dataclass
@@ -42,6 +51,7 @@ class EvidencePayload:
     available_count: int = 0
     unavailable_count: int = 0
     insufficient_coverage_warning: bool = False
+    priority_systems: list = field(default_factory=list)  # KG-grounded system order (may be empty)
 
 
 @dataclass

@@ -57,8 +57,29 @@ async def get_material_planning_data(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": (
-                f"Check material master MRP views (transaction MM03) for material {material} "
-                f"plant {plant}. Verify MRP type is set (PD, VB, etc.) and planning horizon is maintained."
+            "reason": (
+                f"S/4HANA Material Planning Data API failed for material {material} / plant {plant}. "
+                f"Error: {exc}. "
+                "API: I_MaterialPlanning (OData v2). The service may not be activated, "
+                "or the API user lacks authorisation for material master MRP view data."
+            ),
+            "what_was_expected": (
+                f"MRP configuration from material master for material {material} / plant {plant}: "
+                "MRP type (PD=MRP, X0/X1=PP/DS, ND=no planning), MRP controller, "
+                "lot sizing procedure, planning horizon, safety stock, and reorder point. "
+                "Wrong MRP type is the single most common root cause of planning failures — "
+                "if MRP type was recently changed from PD to ND, all planning stops immediately."
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — Run transaction MM03 for material {material}, plant {plant}. "
+                "Views to check: MRP 1 (MRP type, MRP controller, lot size), "
+                "MRP 2 (planning time fence, safety time, Advanced Planning flag), "
+                "MRP 3 (planning strategy, consumption mode). "
+                "Key checks: "
+                "(1) MRP type = 'PD' for standard MRP, or 'X0'/'X1' for PP/DS. "
+                "If 'ND' — planning is OFF. "
+                "(2) Planning horizon must be > 0 for PP/DS to schedule. "
+                "(3) 'Advanced Planning' checkbox (MRP 2) must be ON for PP/DS visibility. "
+                "To see change history: MM04 (display changes) or SE16 on CDHDR filtering MARC."
             ),
         }

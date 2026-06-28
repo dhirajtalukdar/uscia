@@ -184,7 +184,7 @@ export default function SideNav({ collapsed, onExampleClick }) {
       {/* Footer badges */}
       <div className="side-nav-footer">
         <Tag colorScheme="1">A2A Protocol</Tag>
-        <Tag colorScheme="2">12 Systems</Tag>
+        <Tag colorScheme="2">14 Systems</Tag>
         <Tag colorScheme="6">14-Section Report</Tag>
       </div>
     </div>

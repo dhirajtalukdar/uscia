@@ -55,8 +55,31 @@ async def get_ppds_stock_level(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": (
-                f"Check PP/DS stock situation via RRP3 (transaction RRP3) for material {material} "
-                f"plant {plant}. Verify CIF transfer has populated PP/DS supply board."
+            "reason": (
+                f"S/4HANA PP/DS stock / resource availability API failed for material "
+                f"{material} / plant {plant}. "
+                f"Error: {exc}. "
+                "This API queries the PP/DS supply board (RRP3 equivalent). "
+                "The failure may indicate: PP/DS is not activated in this system, "
+                "CIF has never transferred this material to PP/DS, or the API user "
+                "lacks PP/DS authorisation objects."
+            ),
+            "what_was_expected": (
+                f"PP/DS stock and supply element data for material {material} / plant {plant} — "
+                "including available stock, PP/DS planned orders, capacity pegging, "
+                "and resource load. "
+                "Zero supply elements here means PP/DS has no visibility of this material, "
+                "which typically means CIF transfer failed or the material is not in "
+                "any active integration model."
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — Run transaction /SAPAPO/RRP3 in S/4HANA for material {material}, "
+                f"plant {plant}. "
+                "If the supply board is EMPTY: CIF has not transferred the material to PP/DS. "
+                "Check: CURTO_SIMU (integration model) — is this material/plant included? "
+                "Check: SMQ1 queues APOC* — are there stuck outbound queues? "
+                "Check: SLG1 → object APOCIF → error messages for this material. "
+                "If RRP3 shows data but S/4HANA MRP (MD04) is empty, the PP/DS → S/4HANA "
+                "transfer (bgRFC reverse) is stuck — check SM58 for RSMPP* queues."
             ),
         }

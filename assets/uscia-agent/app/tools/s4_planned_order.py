@@ -60,8 +60,28 @@ async def get_planned_orders(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": (
-                f"Check MD04 (transaction MD04) for material {material} plant {plant}. "
-                "Verify MRP run has been executed. Check MRP controller assignment and lot-size key."
+            "reason": (
+                f"S/4HANA Planned Orders API failed for material {material} / plant {plant}. "
+                f"Error: {exc}. "
+                "API: API_PLANNED_ORDERS (C_PlannedOrderTP). The S/4HANA system may be "
+                "unreachable, the MRP API service may not be activated, or the API user "
+                "lacks authorisation for C_PlannedOrderTP."
+            ),
+            "what_was_expected": (
+                f"All planned orders for material {material} / plant {plant} — "
+                "including order type (PP/DS vs MRP-generated), planned quantity, "
+                "scheduled dates, and order status. "
+                "Zero planned orders here = MRP has not run, the material master is not "
+                "MRP-relevant, or all planned orders were deleted without being converted."
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — Run transaction MD04 in S/4HANA for material {material}, "
+                f"plant {plant}. "
+                "The MRP overview shows planned orders (PlOrd), production orders (PrdOrd), "
+                "purchase requisitions (PurRqs), and sales requirements (CusOrd). "
+                "If the list is EMPTY: check MM03 → MRP 1 tab — MRP type must be 'PD' "
+                "(MRP) or 'X0'/'X1' (PP/DS). If MRP type is blank or 'ND', planning "
+                "has been intentionally deactivated for this material. "
+                "To re-run MRP: transaction MD02 (single item, multi-level) or MD01 (plant-wide)."
             ),
         }

@@ -59,8 +59,28 @@ async def get_planned_independent_requirements(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": (
-                f"Check independent requirements in MD61/MD62 for material {material} "
-                f"plant {plant} version {planning_version}. Verify demand exists for the date range."
+            "reason": (
+                f"S/4HANA Planned Independent Requirements (PIR) API failed for material "
+                f"{material} / plant {plant}. "
+                f"Error: {exc}. "
+                "API: A_PlannedIndepRqmt_2. The service may not be activated on this "
+                "S/4HANA system, or the API user lacks authorisation for PIR data."
+            ),
+            "what_was_expected": (
+                f"Planned Independent Requirements (demand plan) for material {material} / "
+                f"plant {plant}, planning version {planning_version}. "
+                "PIRs are the demand signal that drives MRP and PP/DS planning — "
+                "zero PIRs means no demand was transferred from IBP, which directly "
+                "explains why no planned orders were generated."
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — Run transaction MD62 (Display Planned Independent Requirements) "
+                f"for material {material}, plant {plant}, planning version {planning_version}. "
+                "If no rows appear: demand was never created or transferred from IBP. "
+                "To check IBP → S/4HANA transfer: open IBP Supply Planning → check RTI "
+                "(Real-Time Integration) transfer log for this material/plant — look for "
+                "transfer status FAILED or PENDING. "
+                "To manually create PIR for testing: MD61 (Create Independent Requirements). "
+                "NOTE: IBP uses planning version 00 in S/4HANA by default."
             ),
         }

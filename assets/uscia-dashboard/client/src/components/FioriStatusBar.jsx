@@ -11,7 +11,7 @@ export default function FioriStatusBar({ agentOnline, loading, messagesCount }) 
           hideCloseButton
           style={{ width: '100%' }}
         >
-          ⚙️ Investigation in progress — collecting evidence from 12 systems (IBP · RTI/CPI · bgRFC · MRP · PP/DS · aATP)…
+          ⚙️ Investigation in progress — querying 15 systems in parallel (IBP · RTI/CPI · bgRFC · S/4HANA MRP · PP/DS · aATP · BDC · IBP Jobs)…
         </MessageStrip>
       </div>
     );

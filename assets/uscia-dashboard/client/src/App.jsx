@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import FioriShell from './components/FioriShell.jsx';
 import SideNav from './components/SideNav.jsx';
 import ReportView from './components/ReportView.jsx';
+import SessionHistory from './components/SessionHistory.jsx';
 import './App.css';
 
 const SESSION_ID = uuidv4();
@@ -98,6 +99,7 @@ export default function App() {
   const [view, setView]               = useState('consultant');
   const [agentOnline, setAgentOnline] = useState(null);
   const [activeReportId, setActiveReportId] = useState(null);
+  const [pendingApproval, setPendingApproval] = useState(false);
 
   const contextIdRef = useRef(SESSION_ID);
   const messagesRef  = useRef(messages);
@@ -163,7 +165,9 @@ export default function App() {
       const data = await res.json();
       contextIdRef.current = data.contextId || contextIdRef.current;
       const report = extractReport(data.result);
-      updateLastAgent({ content: report || '⚠️ Empty response', status: 'done', incidentId: data.taskId });
+      const isApproval = report && report.includes('PENDING_APPROVAL');
+      if (isApproval) setPendingApproval(true);
+      updateLastAgent({ content: report || '⚠️ Empty response', status: 'done', incidentId: data.taskId, requiresApproval: isApproval });
     } catch (err) {
       updateLastAgent({
         content: err.name === 'TimeoutError' ? '⏱️ Investigation timed out.' : `⚠️ ${err.message}`,
@@ -183,7 +187,15 @@ export default function App() {
     contextIdRef.current = uuidv4();
     setMessages([WELCOME]);
     setActiveReportId(null);
+    setPendingApproval(false);
   }, []);
+
+  // Send approval/rejection follow-up
+  const handleApproval = useCallback(async (approve) => {
+    setPendingApproval(false);
+    const word = approve ? 'approve' : 'reject';
+    await sendMessage(word);
+  }, [sendMessage]);
 
   // Determine what to show in main content area
   const latestReport = getLatestReport(messages);
@@ -207,8 +219,15 @@ export default function App() {
       />
 
       <div className="fiori-app-body">
-        {/* Left: Incident Navigator */}
+        {/* Left: Session History + Incident Navigator */}
         <div className={`fiori-side-nav-wrapper${sidebarCollapsed ? ' collapsed' : ''}`}>
+          {!sidebarCollapsed && (
+            <SessionHistory
+              messages={messages}
+              activeReportId={activeReportId}
+              onSelect={(id) => setActiveReportId(id)}
+            />
+          )}
           <SideNav collapsed={sidebarCollapsed} onExampleClick={(t) => setInput(t)} />
         </div>
 
@@ -239,14 +258,25 @@ export default function App() {
         {/* Right: Joule-style chat panel */}
         <div className="joule-panel">
           <div className="joule-panel-header">
-            <div className="joule-icon">J</div>
-            <span>USCIA</span>
-            {agentOnline === true && (
-              <span style={{marginLeft:'auto',fontSize:'0.7rem',opacity:0.8,display:'flex',alignItems:'center',gap:'0.3rem'}}>
-                <span style={{width:6,height:6,borderRadius:'50%',background:'#2ecc71',display:'inline-block'}} />
-                Online
-              </span>
-            )}
+            <div className="joule-icon" style={{
+              background: 'linear-gradient(135deg, #0070f2 0%, #00b0f0 60%, #6644cc 100%)',
+              borderRadius: 8, width: 26, height: 26, display: 'flex', alignItems: 'center',
+              justifyContent: 'center', fontWeight: 800, fontSize: '0.78rem', letterSpacing: '-0.5px',
+              boxShadow: '0 0 10px rgba(0,112,242,0.5)'
+            }}>✦</div>
+            <span style={{fontWeight: 600, letterSpacing: '0.02em'}}>USCIA</span>
+            <span style={{marginLeft: 4, fontSize: '0.68rem', opacity: 0.55, fontWeight: 400}}>Supply Chain AI</span>
+            <span style={{marginLeft:'auto', fontSize:'0.68rem', display:'flex', alignItems:'center', gap:'0.3rem'}}>
+              {agentOnline === true && <>
+                <span style={{width:6,height:6,borderRadius:'50%',background:'#2ecc71',boxShadow:'0 0 5px #2ecc71',display:'inline-block'}} />
+                <span style={{opacity:0.8}}>Online</span>
+              </>}
+              {agentOnline === false && <>
+                <span style={{width:6,height:6,borderRadius:'50%',background:'#e74c3c',display:'inline-block'}} />
+                <span style={{opacity:0.8}}>Offline</span>
+              </>}
+              {agentOnline === null && <span style={{opacity:0.5}}>Connecting…</span>}
+            </span>
           </div>
 
           <div className="joule-panel-history">
@@ -329,6 +359,50 @@ export default function App() {
             )}
             <div ref={historyEndRef} />
           </div>
+
+          {/* ── Approval gate card ── */}
+          {pendingApproval && (
+            <div style={{
+              margin: '0 0.75rem 0.5rem',
+              background: 'linear-gradient(135deg, #fff8e1, #fffde7)',
+              border: '1.5px solid #f59e0b',
+              borderRadius: 10,
+              padding: '0.85rem 1rem',
+              flexShrink: 0,
+            }}>
+              <div style={{display:'flex',alignItems:'center',gap:'0.4rem',marginBottom:'0.5rem'}}>
+                <span style={{fontSize:'1.1rem'}}>⚠️</span>
+                <span style={{fontWeight:700,fontSize:'0.82rem',color:'#92400e'}}>Action Requires Approval</span>
+              </div>
+              <p style={{fontSize:'0.75rem',color:'#78350f',margin:'0 0 0.75rem',lineHeight:1.5}}>
+                USCIA has identified an executable action. Review the recommended actions in the report, then approve or reject execution.
+              </p>
+              <div style={{display:'flex',gap:'0.5rem'}}>
+                <button
+                  onClick={() => handleApproval(true)}
+                  style={{
+                    flex:1, padding:'0.5rem', borderRadius:6,
+                    background:'#107e3e', color:'#fff', border:'none',
+                    fontWeight:600, fontSize:'0.78rem', cursor:'pointer',
+                    display:'flex',alignItems:'center',justifyContent:'center',gap:'0.3rem',
+                  }}
+                >
+                  ✓ Approve
+                </button>
+                <button
+                  onClick={() => handleApproval(false)}
+                  style={{
+                    flex:1, padding:'0.5rem', borderRadius:6,
+                    background:'#bb0000', color:'#fff', border:'none',
+                    fontWeight:600, fontSize:'0.78rem', cursor:'pointer',
+                    display:'flex',alignItems:'center',justifyContent:'center',gap:'0.3rem',
+                  }}
+                >
+                  ✕ Reject
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="joule-panel-input">
             <div className="joule-input-row">

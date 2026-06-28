@@ -1,0 +1,130 @@
+{
+  "_comment": "USCIA Phase 3 — Mock Execution Agents. Live specialist agents will be deployed and registered on the SAP Agent Gateway in Phase 4.",
+  "servers": {
+    "uscia-execution-mock": {
+      "_description": "Simulated execution agents for local development and end-to-end dispatch testing. Each tool mirrors the interface that the live Phase 4 specialist agent will expose on the Agent Gateway.",
+      "tools": {
+
+        "restart_bgrfc_queue": {
+          "description": "[MOCK AGENT] Restarts a blocked bgRFC queue entry in S/4HANA. Simulates the SM58 restart that the live bgRFC Execution Agent will perform in Phase 4.",
+          "input_schema": {
+            "properties": {
+              "material":    { "type": "string", "description": "SAP material number (MATNR)" },
+              "plant":       { "type": "string", "description": "SAP plant code (WERKS)" },
+              "root_cause":  { "type": "string", "description": "Root-cause label from investigation" },
+              "description": { "type": "string", "description": "Human-readable action description" }
+            },
+            "required": []
+          },
+          "mock_response": {
+            "mode":           "MOCK_AGENT",
+            "status":         "MOCK_EXECUTED",
+            "action":         "restart_bgrfc_queue",
+            "queue_restarted": true,
+            "target_system":  "S4HANA (simulated)",
+            "tcode":          "SM58 / SBGRFCMON",
+            "message":        "Mock: bgRFC queue restart simulated successfully. The live bgRFC Execution Agent (Phase 4) will perform this operation autonomously on the target S/4HANA system.",
+            "phase_notice":   "⚠️ Mock Agent — Live specialist agent will be deployed in Phase 4."
+          }
+        },
+
+        "reprocess_cpi_message": {
+          "description": "[MOCK AGENT] Reprocesses a failed SAP Integration Suite (CPI/RTI) message. Simulates the SXMB_MONI retry that the live CPI Execution Agent will perform in Phase 4.",
+          "input_schema": {
+            "properties": {
+              "material":    { "type": "string", "description": "SAP material number (MATNR)" },
+              "plant":       { "type": "string", "description": "SAP plant code (WERKS)" },
+              "root_cause":  { "type": "string", "description": "Root-cause label from investigation" },
+              "description": { "type": "string", "description": "Human-readable action description" }
+            },
+            "required": []
+          },
+          "mock_response": {
+            "mode":              "MOCK_AGENT",
+            "status":            "MOCK_EXECUTED",
+            "action":            "reprocess_cpi_message",
+            "message_requeued":  true,
+            "target_system":     "SAP Integration Suite (simulated)",
+            "tcode":             "SXMB_MONI / Integration Suite Message Monitor",
+            "message":           "Mock: Failed CPI message requeue simulated successfully. The live CPI Execution Agent (Phase 4) will trigger message reprocessing via the Integration Suite API.",
+            "phase_notice":      "⚠️ Mock Agent — Live specialist agent will be deployed in Phase 4."
+          }
+        },
+
+        "rerun_ppds_heuristic": {
+          "description": "[MOCK AGENT] Reruns the PP/DS scheduling heuristic for a material/plant. Simulates the /SAPAPO/RRP3 heuristic run that the live PP/DS Execution Agent will perform in Phase 4.",
+          "input_schema": {
+            "properties": {
+              "material":          { "type": "string", "description": "SAP material number (MATNR)" },
+              "plant":             { "type": "string", "description": "SAP plant code (WERKS)" },
+              "heuristic_profile": { "type": "string", "description": "PP/DS heuristic profile ID (optional)" },
+              "root_cause":        { "type": "string", "description": "Root-cause label from investigation" },
+              "description":       { "type": "string", "description": "Human-readable action description" }
+            },
+            "required": []
+          },
+          "mock_response": {
+            "mode":              "MOCK_AGENT",
+            "status":            "MOCK_EXECUTED",
+            "action":            "rerun_ppds_heuristic",
+            "heuristic_run":     true,
+            "target_system":     "S4HANA PP/DS (simulated)",
+            "tcode":             "/SAPAPO/RRP3",
+            "orders_rescheduled": 3,
+            "message":           "Mock: PP/DS heuristic run simulated — 3 orders rescheduled in simulated horizon. The live PP/DS Execution Agent (Phase 4) will execute this via the PP/DS API.",
+            "phase_notice":      "⚠️ Mock Agent — Live specialist agent will be deployed in Phase 4."
+          }
+        },
+
+        "rerun_mrp_single_item": {
+          "description": "[MOCK AGENT] Runs single-item MRP for a material/plant combination. Simulates the MD03 planning run that the live MRP Execution Agent will perform in Phase 4.",
+          "input_schema": {
+            "properties": {
+              "material":    { "type": "string", "description": "SAP material number (MATNR)" },
+              "plant":       { "type": "string", "description": "SAP plant code (WERKS)" },
+              "root_cause":  { "type": "string", "description": "Root-cause label from investigation" },
+              "description": { "type": "string", "description": "Human-readable action description" }
+            },
+            "required": []
+          },
+          "mock_response": {
+            "mode":            "MOCK_AGENT",
+            "status":          "MOCK_EXECUTED",
+            "action":          "rerun_mrp_single_item",
+            "mrp_executed":    true,
+            "target_system":   "S4HANA MRP (simulated)",
+            "tcode":           "MD01N / MD03",
+            "orders_created":  2,
+            "message":         "Mock: Single-item MRP run simulated — 2 planned orders created for material/plant. The live MRP Execution Agent (Phase 4) will execute this via the S/4HANA MRP API.",
+            "phase_notice":    "⚠️ Mock Agent — Live specialist agent will be deployed in Phase 4."
+          }
+        },
+
+        "rerun_ibp_planning_job": {
+          "description": "[MOCK AGENT] Triggers an IBP supply planning job for a material/plant. Simulates the IBP job submission that the live IBP Execution Agent will perform in Phase 4.",
+          "input_schema": {
+            "properties": {
+              "material":         { "type": "string", "description": "SAP material number (MATNR)" },
+              "plant":            { "type": "string", "description": "SAP plant code (WERKS)" },
+              "planning_version": { "type": "string", "description": "IBP planning version (optional)" },
+              "root_cause":       { "type": "string", "description": "Root-cause label from investigation" },
+              "description":      { "type": "string", "description": "Human-readable action description" }
+            },
+            "required": []
+          },
+          "mock_response": {
+            "mode":           "MOCK_AGENT",
+            "status":         "MOCK_EXECUTED",
+            "action":         "rerun_ibp_planning_job",
+            "job_submitted":  true,
+            "target_system":  "SAP IBP (simulated)",
+            "job_id":         "MOCK-IBP-JOB-2025-001",
+            "message":        "Mock: IBP supply planning job submitted and completed in simulation. The live IBP Execution Agent (Phase 4) will submit and monitor this job via the IBP OData API.",
+            "phase_notice":   "⚠️ Mock Agent — Live specialist agent will be deployed in Phase 4."
+          }
+        }
+
+      }
+    }
+  }
+}

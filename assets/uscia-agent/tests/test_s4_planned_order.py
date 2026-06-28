@@ -27,7 +27,8 @@ async def test_get_planned_orders_missing_data_on_error():
 
     assert result["status"] == "MISSING_DATA"
     assert result["system"] == "S4HANA_PLANNED_ORDER"
-    assert "MD04" in result["guidance"]
+    assert "manual_investigation" in result
+    assert "MD04" in result["manual_investigation"]
 
 
 @pytest.mark.asyncio

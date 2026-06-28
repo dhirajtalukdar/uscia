@@ -293,9 +293,34 @@ async def narrate_findings(
             focus_names = [func_names.get(s, s) for s in key_systems]
             focus_hint = f"\nFor '{ctx.incident_type}', the key diagnostic areas are: {', '.join(focus_names)}."
 
+        # ── KG Process Context injection ──────────────────────────────────────
+        # If KG grounding ran at M1, inject the SAP RBA process chain and
+        # disambiguated terms into the prompt so the LLM reasons about the
+        # correct process boundary — not just raw API field values.
+        kg_context_block = ""
+        if ctx.kg_process_context:
+            kg_source = "SAP Knowledge Graph (live)" if not ctx.kg_fallback_used else "SAP process knowledge (local)"
+            kg_context_block = (
+                f"\nSAP Process Context (from {kg_source}):\n"
+                f"{ctx.kg_process_context}\n"
+            )
+            if ctx.kg_bp_ids:
+                kg_context_block += f"Business Process IDs: {', '.join(ctx.kg_bp_ids)}\n"
+            if ctx.kg_disambiguated_terms:
+                terms_str = "; ".join(
+                    f"{k} = {v}" for k, v in list(ctx.kg_disambiguated_terms.items())[:5]
+                )
+                kg_context_block += f"User terms resolved: {terms_str}\n"
+            if ctx.kg_relevant_systems:
+                kg_context_block += (
+                    f"Priority systems for this incident type: "
+                    f"{', '.join(ctx.kg_relevant_systems[:4])}\n"
+                )
+
         prompt = (
             f"Generate a forensic supply chain investigation report based ONLY on the evidence below.\n\n"
             f"Evidence from live SAP systems:\n{evidence_json}\n\n"
+            f"{kg_context_block}"
             f"{focus_hint}\n"
             "Rules:\n"
             "- NEVER use API service names in the report. Use functional SAP terms (see system prompt).\n"

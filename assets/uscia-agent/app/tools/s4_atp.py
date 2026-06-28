@@ -58,10 +58,32 @@ async def get_atp_check_result(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": (
-                f"Basic ATP check service is not available on this system. "
-                f"For product allocation overview, check transaction CO09 for material {material} "
-                f"plant {plant}. For real-time ATP simulation, contact your S/4HANA basis team "
-                f"to activate API_AVAILABILITYCHECKING_SRV or aATP configuration."
+            "reason": (
+                f"S/4HANA ATP (Available-to-Promise) / Product Allocation API failed. "
+                f"Error: {exc}. "
+                "API: C_ProdAllocOvwPeriods (product allocation overview). "
+                "This service requires aATP (advanced ATP) to be activated on the S/4HANA "
+                "system. If aATP is not licensed or configured, this data is not available. "
+                "Contact your S/4HANA Basis team to verify aATP activation "
+                "(transaction /SAPAPO/ATPQ_CUST or BAdI /SAPAPO/ATPQ_CUST)."
+            ),
+            "what_was_expected": (
+                f"Product allocation overview for material {material} / plant {plant} — "
+                "showing how much of the available supply is already allocated to customer "
+                "orders or planning buckets, and how much remains free for new demand. "
+                "A fully consumed allocation here explains why new sales orders are getting "
+                "ATP denial even when physical stock exists in the warehouse."
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — Run transaction CO09 in S/4HANA for material {material}, "
+                f"plant {plant}. "
+                "CO09 shows the availability overview: stock, confirmed orders, "
+                "planned receipts, and the ATP quantity per period. "
+                "If CO09 shows 0 ATP quantity but MD04 shows planned orders: "
+                "the planned orders are not being confirmed — check the MRP Lot 'Fixed' "
+                "flag or a rounding value preventing partial confirmation. "
+                "If aATP is active: transaction /SAPAPO/ATPQ_CUST shows product "
+                "allocation configuration — verify allocation procedure is assigned to "
+                f"material {material}."
             ),
         }

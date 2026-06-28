@@ -230,13 +230,81 @@ def _material_exists_in_s4(payload: EvidencePayload) -> bool:
     return False
 
 
-def classify(graph: EvidenceGraph, payload: EvidencePayload) -> Classification:
+# ── KG-driven classifier bias ─────────────────────────────────────────────────
+# Maps SAP Reference Architecture BP IDs to the rule sets they favour.
+# BPS-349: Production planning & scheduling  → PP/DS / MRP layer rules
+# BPS-327: Demand/supply alignment & transfer → IBP / CPI / bgRFC layer rules
+# NEUTRAL rules apply regardless of BP layer.
+_BP349_RULE_IDS: frozenset[str] = frozenset({"RC004", "RC005", "RC006"})
+_BP327_RULE_IDS: frozenset[str] = frozenset({"RC001", "RC002", "RC007"})
+_NEUTRAL_RULE_IDS: frozenset[str] = frozenset({"RC003", "RC003B", "RC008"})
+
+
+def _apply_kg_bias(rules: list[dict], kg_bp_ids: list[str]) -> list[dict]:
+    """Reorder deterministic rules based on KG BP IDs.
+
+    Evidence conditions still apply — we are only changing evaluation ORDER so
+    the most BP-relevant rules are tried first.  When both or neither BP IDs are
+    present, the original order is preserved.
+
+    Fallback rule (RC008) is always kept last.
+    """
+    if not kg_bp_ids:
+        return rules
+
+    has_349 = "BPS-349" in kg_bp_ids
+    has_327 = "BPS-327" in kg_bp_ids
+
+    if has_349 and not has_327:
+        priority_ids = _BP349_RULE_IDS
+        bias_direction = "PP/DS-scheduling (BPS-349)"
+    elif has_327 and not has_349:
+        priority_ids = _BP327_RULE_IDS
+        bias_direction = "IBP/CPI-integration (BPS-327)"
+    else:
+        # Both present or unrecognised — no bias
+        return rules
+
+    fallback_rules = [r for r in rules if r.get("fallback")]
+    non_fallback = [r for r in rules if not r.get("fallback")]
+
+    prioritised = [r for r in non_fallback if r.get("id") in priority_ids]
+    deprioritised = [r for r in non_fallback if r.get("id") not in priority_ids]
+
+    logger.info(
+        "M4.kg_bias: rule order biased — bp_ids=%s, direction=%s, "
+        "prioritised_rules=%s, deprioritised_rules=%s",
+        kg_bp_ids,
+        bias_direction,
+        [r["id"] for r in prioritised],
+        [r["id"] for r in deprioritised],
+    )
+    return prioritised + deprioritised + fallback_rules
+
+
+def classify(
+    graph: EvidenceGraph,
+    payload: EvidencePayload,
+    ctx: "InvestigationContext | None" = None,
+) -> Classification:
     """
     Apply deterministic classification rules to the evidence payload.
     Returns a Classification with root_cause, confidence, and tagged findings.
     Zero API results for any system → MISSING_DATA, never 'no issue found'.
+
+    When *ctx* carries KG BP IDs at HIGH or MEDIUM confidence, the rule
+    evaluation order is biased toward the most relevant process layer
+    (BPS-349 → PP/DS rules first; BPS-327 → IBP/CPI rules first).
+    Evidence conditions still govern which rule fires — bias only changes
+    which rule is *tried first*.
     """
     rules = _load_rules()
+
+    # ── Apply KG-driven rule bias (optional, evidence conditions still apply) ─
+    kg_bp_ids: list[str] = []
+    if ctx is not None and ctx.kg_confidence in ("HIGH", "MEDIUM") and ctx.kg_bp_ids:
+        kg_bp_ids = ctx.kg_bp_ids
+    rules = _apply_kg_bias(rules, kg_bp_ids)
 
     confirmed: list[str] = []
     probable: list[str] = []

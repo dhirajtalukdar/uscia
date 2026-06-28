@@ -65,13 +65,32 @@ async def get_bgrfc_queue_status(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": (
-                f"Check bgRFC queue status in SM58 (transaction SM58). "
-                f"Look for queues prefixed with APOC (CIF) or RSMPP (MRP). "
-                f"Filter by date: {date_from}. "
-                f"Check for SYSFAIL or CPICERR errors. "
-                f"Also check SXMB_MONI for integration engine messages. "
-                f"Plant: {plant}. "
-                + (f"Related EXTERNID: {externid}." if externid else "")
+            "reason": (
+                f"S/4HANA bgRFC / Business Event Handler queue API (C_BEHQUEUEDATA_CDS) "
+                f"is unreachable for plant {plant}. "
+                f"Error: {exc}. "
+                "The S/4HANA system may be temporarily unavailable, the API user may lack "
+                "authorisation for C_BEHQUEUEDATA_CDS, or the BTP Destination (S4HANA) "
+                "is misconfigured."
+            ),
+            "what_was_expected": (
+                "Business Event Handler queue entries showing pending or failed "
+                "bgRFC messages from the CIF integration (queues: APOC*) and MRP "
+                f"background processing (queues: RSMPP*) for plant {plant} "
+                f"around {date_from}. "
+                "Stuck bgRFC queues are a primary cause of planned order data never "
+                "reaching S/4HANA from IBP/PP/DS — every failed queue entry here "
+                "corresponds to a planned order that was silently dropped."
+                + (f" Related IBP EXTERNID: {externid}." if externid else "")
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — Run transaction SM58 in S/4HANA. "
+                f"Filter by: Creation date = {date_from}, Destination = APOC* (CIF queues) "
+                f"or RSMPP* (MRP queues), Plant = {plant}. "
+                "Status SYSFAIL = RFC destination down; CPICERR = network/timeout. "
+                "To restart: select stuck entries → Edit → Repeat. "
+                "Also run SMQ1 (qRFC outbound monitor) and check queues APOCQ* — "
+                "stuck qRFC queues block all subsequent CIF transfers for the integration model. "
+                + (f"Search for EXTERNID {externid} in SXMB_MONI to trace the originating message." if externid else "")
             ),
         }

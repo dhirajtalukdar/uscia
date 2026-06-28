@@ -18,7 +18,7 @@ export default function FioriShell({ agentOnline, view, onViewChange, onClear, s
     <div className="fiori-shell-wrapper">
       <ShellBar
         primaryTitle="USCIA"
-        secondaryTitle="Unified Supply Chain Intelligence"
+        secondaryTitle="Supply Chain Diagnostics · 14 Systems · A2A"
         logo={<SAPLogo />}
         showNotifications={false}
         showProductSwitch={false}

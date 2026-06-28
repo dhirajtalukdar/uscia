@@ -65,8 +65,12 @@ cf set-env uscia-agent IBP_CLIENT_ID     "<your-ibp-client-id>"
 cf set-env uscia-agent IBP_CLIENT_SECRET "<your-ibp-client-secret>"
 ```
 
-> CPI and Cloud ALM stub clients are activated by setting `CPI_BASE_URL` / `CLOUD_ALM_BASE_URL`
-> via `cf set-env` after the initial push.
+> CPI Message Processing Logs are now live (not a stub). Set `CPI_BASE_URL`, `CPI_TOKEN_URL`,
+> `CPI_CLIENT_ID`, `CPI_CLIENT_KEY` OR create a BTP destination named `SAP_CPI` — the tool
+> degrades gracefully if neither is configured.
+> IBP Monitor System Tasks are also live. The same IBP destination/env vars used for supply
+> data also drive job monitoring (same `IBP` BTP destination).
+> Cloud ALM is still a stub — activate by setting `CLOUD_ALM_BASE_URL` via `cf set-env`.
 
 ---
 
@@ -136,16 +140,28 @@ cf logs uscia-agent   # live stream
 
 ---
 
-## Step 8 — Optional: enable stub backends after initial push
+## Step 8 — Optional: enable additional backends after initial push
 
 ```bash
-# CPI integration
-cf set-env uscia-agent CPI_BASE_URL     "<cpi-url>"
-cf set-env uscia-agent CPI_TOKEN_URL    "<cpi-token-url>"
-cf set-env uscia-agent CPI_CLIENT_ID    "<cpi-id>"
-cf set-env uscia-agent CPI_CLIENT_KEY   "<cpi-key>"
+# ── CPI Message Processing Logs (live — fills biggest integration gap) ────────
+# Option A: BTP destination (recommended)
+#   Create destination 'SAP_CPI' in BTP cockpit with OAuth2ClientCredentials
+#   pointing to your CPI tenant. No env vars needed.
+#
+# Option B: raw env vars
+cf set-env uscia-agent CPI_BASE_URL     "<cpi-tenant-url>"
+cf set-env uscia-agent CPI_TOKEN_URL    "<cpi-token-url>/oauth/token"
+cf set-env uscia-agent CPI_CLIENT_ID    "<cpi-client-id>"
+cf set-env uscia-agent CPI_CLIENT_KEY   "<cpi-client-secret>"
+# Optional — override default iFlow name if your tenant uses a different name:
+# cf set-env uscia-agent CPI_RTI_IFLOW  "IBP_RTI_TO_S4HANA"
 
-# Cloud ALM integration
+# ── IBP Monitor System Tasks (live — driven by same IBP destination/env vars) ─
+# No extra config needed if IBP is already configured above.
+# Override BTP destination name if needed (default: 'IBP'):
+# cf set-env uscia-agent IBP_DESTINATION_NAME "IBP"
+
+# ── Cloud ALM (still Phase 2 stub) ────────────────────────────────────────────
 cf set-env uscia-agent CLOUD_ALM_BASE_URL    "<calm-url>"
 cf set-env uscia-agent CLOUD_ALM_TOKEN_URL   "<calm-token-url>"
 cf set-env uscia-agent CLOUD_ALM_CLIENT_ID   "<calm-id>"
@@ -189,7 +205,11 @@ cf push          # hot redeploy — zero downtime if instances > 1
 | `IBP_TOKEN_URL` | cf set-env | Required for IBP |
 | `IBP_CLIENT_ID` | cf set-env | Required for IBP |
 | `IBP_CLIENT_SECRET` | cf set-env | Required for IBP |
-| `CPI_BASE_URL` | cf set-env | Optional — activates CPI stub |
+| `CPI_BASE_URL` | cf set-env | Optional — activates CPI Message Processing Logs (or use `SAP_CPI` BTP destination) |
+| `CPI_TOKEN_URL` | cf set-env | Optional — CPI OAuth token URL |
+| `CPI_CLIENT_ID` | cf set-env | Optional — CPI OAuth client ID |
+| `CPI_CLIENT_KEY` | cf set-env | Optional — CPI OAuth client secret |
+| `CPI_RTI_IFLOW` | cf set-env | Optional — override default iFlow name (default: `IBP_RTI_TO_S4HANA`) |
 | `CLOUD_ALM_BASE_URL` | cf set-env | Optional — activates Cloud ALM stub |
 | `LOG_LEVEL` | manifest.yml | = `INFO` |
 | `JOULE_RUNTIME` | NOT SET in CF | Absence = CF mode |

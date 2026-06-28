@@ -56,8 +56,30 @@ async def get_ppds_flexible_constraints(
         return {
             "status": "MISSING_DATA",
             "system": _MISSING,
-            "guidance": (
-                f"Check flexible constraints in PP/DS via /SAPAPO/CDPS0 or constraint editor "
-                f"for plant {plant}. Verify capacity limits and validity periods are correctly maintained."
+            "reason": (
+                f"S/4HANA PP/DS Constraints API failed for plant {plant}. "
+                f"Error: {exc}. "
+                "API: /SAPAPO/C_PPDS_CONSTRAINTS (CDS view). This API may not be "
+                "available in all S/4HANA releases — it requires PP/DS add-on activation. "
+                "The API user may also lack /SAPAPO/* authorisation objects."
+            ),
+            "what_was_expected": (
+                f"PP/DS flexible constraints and capacity limits for plant {plant} — "
+                "including constraint definitions, capacity limits, validity periods, "
+                "and whether any constraints are currently BINDING (i.e., actively "
+                "preventing scheduling). "
+                "A binding constraint that has not been reviewed is a common reason why "
+                "PP/DS heuristics produce zero or partial planned orders for a plant."
+            ),
+            "manual_investigation": (
+                f"RIGHT NOW — Run transaction /SAPAPO/CDPS0 in S/4HANA (PP/DS Constraint Editor) "
+                f"for plant {plant}. "
+                "Check: (1) Are any constraints currently active with validity period covering today? "
+                "(2) Are capacity limits set to 0 or very low values? "
+                "(3) Are constraints BINDING (flagged as hard constraint)? "
+                "Also check: /SAPAPO/RRP7 (PP/DS Capacity Evaluation) — shows resource load "
+                "vs capacity for all work centres in the plant. "
+                "If resources are at 100% load, new planned orders cannot be scheduled — "
+                "either extend capacity or adjust the planning horizon."
             ),
         }

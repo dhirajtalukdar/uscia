@@ -40,7 +40,7 @@ export default function ChatArea({ messages, view, loading }) {
             <Card className="chat-card chat-card--agent">
               <div className="chat-card-thinking">
                 <BusyIndicator active size="S" />
-                <span className="thinking-label">Investigating — querying 12 systems in parallel…</span>
+                <span className="thinking-label">Investigating — querying 15 systems in parallel…</span>
               </div>
             </Card>
           </div>

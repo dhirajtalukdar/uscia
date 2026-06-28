@@ -87,13 +87,23 @@ async def test_narrator_fallback_on_llm_exception():
 
 
 def test_fallback_narration_has_all_sections():
-    """_fallback_narration must include all 14 section keys in both views."""
-    from llm.narrator import _fallback_narration, _14_SECTIONS
+    """
+    _fallback_narration returns empty section dicts by design.
+
+    Intentional behaviour change (QL8 validation): fallback returns empty dicts
+    so that report/generator.py's _auto_section() fires for each of the 14 sections
+    individually — producing section-appropriate deterministic content rather than
+    dumping all findings identically into every section.
+
+    The report generator guarantees all 14 sections are present; the narrator
+    fallback does not need to pre-populate them.
+    """
+    from llm.narrator import _fallback_narration
     result = _fallback_narration(_make_classification(), _make_ctx())
     assert result.fallback_used is True
-    for section in _14_SECTIONS:
-        assert section in result.consultant_sections
-        assert section in result.planner_sections
+    # Empty dicts are correct — report generator fills sections via _auto_section()
+    assert isinstance(result.consultant_sections, dict)
+    assert isinstance(result.planner_sections, dict)
 
 
 def test_build_evidence_payload_contains_context():
