@@ -1,0 +1,33 @@
+{
+  "schema_version": 2,
+  "phase": "deploy",
+  "timestamp": "2026-06-12T12:58:06Z",
+  "agent_dir": "assets/uscia-agent",
+  "summary": "Deploy-phase preflight, test fixes, and local runbook generation.",
+  "steps_completed": [
+    "6.0a  — state.json located and validated (schema_version=2)",
+    "6.0b  — All CF artefacts verified: manifest.yml, Procfile, runtime.txt, .cfignore, aicore.py, 4 client modules, requirements.txt clean",
+    "6.0c  — Full test suite: 3 issues fixed (s4hana_client auth tokens, conftest import path, aicore gen_ai_hub lazy import), 108/108 tests pass",
+    "6.0.1 — CF CLI v8.9.0 downloaded and installed at ~/bin/cf",
+    "6.1   — cf api blocked (sandbox DNS cannot resolve [REDACTED]); user must run CF commands locally",
+    "6+    — DEPLOY.md written to assets/uscia-agent/DEPLOY.md with complete local 8-step runbook"
+  ],
+  "fixes": {
+    "s4hana_client.py": "auth=[REDACTED]] tokens (lines 280, 302, 342) replaced with _ba = self._http_auth(dest) pattern",
+    "aicore.py": "gen_ai_hub import wrapped in try/except; _GEN_AI_HUB_AVAILABLE flag; _gen_ai_hub_init_llm alias used at call site",
+    "tests/helpers.py": "New module with FakeClient / FakeS4Client / FakeIBPClient / make_fake extracted from conftest",
+    "tests/conftest.py": "tests/ directory added to sys.path so helpers.py is importable",
+    "tests/test_*.py": "7 tool test files + test_integration_investigation.py: 'from conftest import make_fake' -> 'from helpers import make_fake'"
+  },
+  "test_results": {
+    "total": 108,
+    "passed": 108,
+    "failed": 0
+  },
+  "deploy_blocked_reason": "Sandbox network cannot resolve [REDACTED] — CF CLI commands must run from user's local machine",
+  "artifacts_produced": [
+    "assets/uscia-agent/DEPLOY.md",
+    "assets/uscia-agent/tests/helpers.py",
+    "assets/uscia-agent/migration-audit/history/2026-06-12-125806-deploy.json"
+  ]
+}

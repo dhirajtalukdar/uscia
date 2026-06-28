@@ -1,0 +1,156 @@
+rules:
+  # ── RC001: RTI/CPI message failure ──────────────────────────────────────────
+  # IBP has supply objects but nothing reached S/4HANA planned orders
+  - id: RC001
+    name: RTI_CPI_MESSAGE_FAILURE
+    evidence_tag: PROBABLE
+    confidence: MEDIUM
+    description: >
+      IBP supply objects with EXTERNID exist but no corresponding planned orders in S/4HANA;
+      CPI evidence unavailable. RTI/CPI message failure is probable — check SXMB_MONI.
+    required_available:
+      - IBP_SUPPLY
+      - S4HANA_PLANNED_ORDER
+    required_missing:
+      - SAP_CPI
+    conditions:
+      ibp_has_supply: true
+      s4_planned_orders_count: 0
+
+  # ── RC002: bgRFC queue blockage ─────────────────────────────────────────────
+  # IBP supply objects exist; bgRFC queue unreachable; no planned orders
+  - id: RC002
+    name: BGRFC_QUEUE_BLOCKAGE
+    evidence_tag: PROBABLE
+    confidence: MEDIUM
+    description: >
+      IBP supply objects exist; bgRFC queue evidence unavailable; no planned orders found in
+      S/4HANA. bgRFC queue blockage is probable — check SM58 for APOC/RSMPP queue entries.
+    required_available:
+      - IBP_SUPPLY
+      - S4HANA_PLANNED_ORDER
+    required_missing:
+      - S4HANA_BGRFC_QUEUE
+    conditions:
+      ibp_has_supply: true
+      s4_planned_orders_count: 0
+
+  # ── RC003: Master data config error — MRP type blank ─────────────────────────
+  # Material planning data retrieved AND MRP type is blank → MRP cannot plan
+  - id: RC003
+    name: MASTER_DATA_CONFIG_ERROR
+    evidence_tag: CONFIRMED
+    confidence: HIGH
+    description: >
+      Material planning data retrieved; MRP type is blank or not set.
+      No planned orders generated — MRP type configuration error confirmed.
+      Go to MM02 → MRP 1 tab and set MRP Type (e.g. PD for planned delivery, VB for reorder point).
+    required_available:
+      - S4HANA_MATERIAL_PLANNING
+      - S4HANA_PLANNED_ORDER
+    conditions:
+      mrp_type_blank: true
+      s4_planned_orders_count: 0
+
+  # ── RC003b: No demand — PIR missing despite MRP type set ─────────────────────
+  # MRP type is set, no planned orders, AND no PIR exists → no demand trigger
+  - id: RC003B
+    name: MASTER_DATA_CONFIG_ERROR
+    evidence_tag: CONFIRMED
+    confidence: MEDIUM
+    description: >
+      Material planning data shows MRP type is configured but no planned orders exist and
+      no Planned Independent Requirements (PIR) were found. MRP has no demand to plan against.
+      Create demand in MD61/MD62 or verify IBP demand transfer. Also run MD01N for this
+      material/plant to trigger a fresh MRP calculation.
+    required_available:
+      - S4HANA_MATERIAL_PLANNING
+      - S4HANA_PLANNED_ORDER
+      - S4HANA_PIR
+    conditions:
+      s4_planned_orders_count: 0
+      pir_count_zero: true
+
+  # ── RC004: PP/DS scheduling failure ─────────────────────────────────────────
+  # Planned orders exist in MD04 but PP/DS stock is empty → CIF or scheduling failure
+  - id: RC004
+    name: PPDS_SCHEDULING_FAILURE
+    evidence_tag: CONFIRMED
+    confidence: HIGH
+    description: >
+      Planned orders exist in S/4HANA but no PP/DS stock level entries found.
+      PP/DS scheduling failure confirmed — check RRP3 and capacity/constraint configuration.
+      Also verify CIF integration model (CURTO_SIMU) is active for this material/plant.
+    required_available:
+      - S4HANA_PLANNED_ORDER
+      - S4HANA_PPDS_STOCK
+      - S4HANA_PPDS_CONSTRAINTS
+    conditions:
+      s4_planned_orders_count_gt: 0
+      ppds_stock_entries_count: 0
+
+  # ── RC005: CIF transfer failure ─────────────────────────────────────────────
+  # Planned orders exist but PP/DS config shows no scheduling profile + APOCIF log clean
+  - id: RC005
+    name: CIF_TRANSFER_FAILURE
+    evidence_tag: PROBABLE
+    confidence: MEDIUM
+    description: >
+      Planned orders exist in MD04. MRP issues log shows planning succeeded.
+      No CIF transfer evidence found in APOCIF logs. PP/DS transfer may be blocked.
+      Check SMQ1 for qRFC queue entries (destination APOC*), SLG1/APOCIF for errors,
+      and verify CIF Integration Model is active via CURTO_SIMU or /SAPAPO/CIF.
+      Advanced Planning checkbox (MARC-MTVFP) cannot be verified via OData — check MM02.
+    required_available:
+      - S4HANA_PLANNED_ORDER
+    required_missing:
+      - S4HANA_PPDS_STOCK
+      - S4HANA_APPLICATION_LOGS
+    conditions:
+      s4_planned_orders_count_gt: 0
+
+  # ── RC006: aATP scope mismatch ───────────────────────────────────────────────
+  # Planned orders exist but ATP confirmed quantity is zero
+  - id: RC006
+    name: ATP_SCOPE_MISMATCH
+    evidence_tag: CONFIRMED
+    confidence: HIGH
+    description: >
+      Planned orders exist but ATP confirmation is zero.
+      ATP scope mismatch confirmed — check CO09 for ATP check rule and scope assignment.
+      Verify the product allocation object covers this material/plant combination.
+    required_available:
+      - S4HANA_ATP
+      - S4HANA_PLANNED_ORDER
+    conditions:
+      atp_confirmed_quantity_zero: true
+      s4_planned_orders_count_gt: 0
+
+  # ── RC007: IBP planning gap ──────────────────────────────────────────────────
+  # PIR exists but IBP produced no supply output
+  - id: RC007
+    name: IBP_PLANNING_GAP
+    evidence_tag: CONFIRMED
+    confidence: HIGH
+    description: >
+      PIR exists in S/4HANA but IBP supply plan is empty.
+      IBP planning gap confirmed — no supply output generated for this material-location.
+      Verify IBP planning job completion, planning version, and horizon settings in IBP Monitor.
+    required_available:
+      - S4HANA_PIR
+      - IBP_SUPPLY
+      - S4HANA_PLANNED_ORDER
+    conditions:
+      pir_count_gt: 0
+      ibp_supply_orders_count: 0
+      s4_planned_orders_count: 0
+
+  # ── RC008: Fallback — insufficient evidence ───────────────────────────────────
+  - id: RC008
+    name: OTHER
+    evidence_tag: MISSING_DATA
+    confidence: LOW
+    description: >
+      Insufficient evidence to classify root cause definitively.
+      Manual investigation required across all system layers.
+    fallback: true

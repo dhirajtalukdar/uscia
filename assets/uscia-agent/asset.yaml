@@ -1,0 +1,56 @@
+apiVersion: asset.sap/v1
+kind: Asset
+
+metadata:
+  name: uscia-agent
+  version: 1.0.0
+  description: >
+    USCIA — Unified Supply Chain Intelligence Agent. Investigates SAP supply chain
+    planning failures end-to-end across IBP, RTI/CPI, bgRFC, S/4HANA MRP, PP/DS,
+    and aATP. Returns a 14-section forensic report in Consultant and Planner views
+    in under 5 minutes. Integrates with SAP Joule as a callable agent via A2A protocol.
+
+type: agent
+
+requires:
+  - name: uscia-planned-order-mcp
+    kind: mcp-server
+    ordId: sap.s4:apiResource:PLANNEDORDER_0001:v1
+  - name: uscia-material-planning-mcp
+    kind: mcp-server
+    ordId: sap.s4:apiResource:API_MRP_MATERIALS_SRV_01:v1
+  - name: uscia-pir-mcp
+    kind: mcp-server
+    ordId: sap.s4:apiResource:OP_API_PLND_INDEP_RQMT_SRV_0001:v1
+  - name: uscia-ppds-stock-mcp
+    kind: mcp-server
+    ordId: sap.s4:apiResource:OP_PPDSPRODTDSTLV_0001:v1
+  - name: uscia-ppds-constraints-mcp
+    kind: mcp-server
+    ordId: sap.s4:apiResource:OP_APIFLEXIBLECONSTRAINTS_0001:v1
+  - name: uscia-atp-check-mcp
+    kind: mcp-server
+    ordId: sap.s4:apiResource:CE_APIAVAILTOPROMISECHECK_0001:v1
+
+container:
+  buildPath: .
+  port: 5000
+
+probes:
+  startup:
+    path: /.well-known/agent.json
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 18
+  liveness:
+    path: /.well-known/agent.json
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /.well-known/agent.json
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3

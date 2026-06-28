@@ -1,0 +1,44 @@
+---
+# CF manifest for uscia-agent.
+# The default route is assigned automatically as:
+#   uscia-agent.<default-shared-domain>
+# Override `routes:` only if you need a custom hostname.
+applications:
+  - name: uscia-agent
+    memory: 1G
+    disk_quota: 1G
+    instances: 1
+    buildpacks:
+      - python_buildpack
+    command: gunicorn --worker-class uvicorn.workers.UvicornWorker --workers 1 --bind 0.0.0.0:${PORT} --chdir app main:application
+    timeout: 180
+    health-check-type: http
+    health-check-http-endpoint: /.well-known/agent.json
+    services:
+      - proj-vector-destination-service
+      - proj-vector-connectivity-service
+    env:
+      # S/4HANA destination (Private Cloud, OnPremise proxy via Cloud Connector)
+      S4HANA_DESTINATION_NAME: S4HANA
+      DESTINATION_NAME: S4HANA
+      # AI Core destination
+      AICORE_DESTINATION_NAME: aicore
+      # IBP destination (SaaS — configure in BTP cockpit as OAuth2ClientCredentials)
+      # Create destination named 'IBP' or override the name here:
+      IBP_DESTINATION_NAME: IBP
+      # Legacy raw env var fallback (only needed if not using BTP destination):
+      # IBP_BASE_URL: ""
+      # IBP_TOKEN_URL: ""
+      # IBP_CLIENT_ID: ""
+      # IBP_CLIENT_SECRET: ""
+      # CPI (stub — activate by setting these via cf set-env)
+      # CPI_BASE_URL: ""
+      # CPI_TOKEN_URL: ""
+      # CPI_CLIENT_ID: ""
+      # CPI_CLIENT_KEY: ""
+      # Cloud ALM (stub — activate by setting these via cf set-env)
+      # CLOUD_ALM_BASE_URL: ""
+      # CLOUD_ALM_TOKEN_URL: ""
+      # CLOUD_ALM_CLIENT_ID: ""
+      # CLOUD_ALM_CLIENT_KEY: ""
+      LOG_LEVEL: INFO

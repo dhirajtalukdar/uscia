@@ -1,0 +1,30 @@
+# Build artifacts
+assets/uscia-dashboard/client/dist/
+assets/uscia-dashboard/client/node_modules/
+assets/uscia-dashboard/node_modules/
+
+# Python
+assets/uscia-agent/__pycache__/
+assets/uscia-agent/**/__pycache__/
+assets/uscia-agent/*.pyc
+assets/uscia-agent/**/*.pyc
+assets/uscia-agent/.pytest_cache/
+assets/uscia-agent/.coverage
+assets/uscia-agent/coverage.json
+assets/uscia-agent/htmlcov/
+assets/uscia-agent/test_report.json
+
+# CF junk files created by mistyped pip install
+assets/uscia-agent/=*.0
+assets/uscia-agent/=*
+
+# CF secrets / local overrides
+.env
+*.local
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Claude Code
+.claude/scheduled_tasks.json

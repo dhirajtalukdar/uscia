@@ -1,0 +1,396 @@
+/* ─── ReportView — Fiori-styled structured report ─── */
+
+.report-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+/* Query card */
+.query-card {
+  border-left: 4px solid var(--sapBrandColor, #0070f2);
+}
+.query-card-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+}
+.query-icon {
+  color: var(--sapBrandColor, #0070f2);
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+.query-text-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.query-label {
+  font-size: 0.75rem;
+  color: var(--sapContent_LabelColor, #6a6d73);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.query-text {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--sapTextColor, #1d2d3e);
+  font-style: italic;
+  line-height: 1.4;
+}
+.query-time {
+  font-size: 0.75rem;
+  color: var(--sapContent_LabelColor, #6a6d73);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Context table */
+.context-card { }
+.context-header-tags { display: flex; gap: 0.5rem; align-items: center; }
+.context-table-wrapper { padding: 0 1rem 0.75rem; }
+.fiori-context-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.fiori-context-table th {
+  text-align: left;
+  color: var(--sapContent_LabelColor, #6a6d73);
+  font-weight: 500;
+  padding: 0.4rem 0.75rem 0.4rem 0;
+  width: 130px;
+  white-space: nowrap;
+}
+.fiori-context-table td {
+  padding: 0.4rem 1rem 0.4rem 0;
+  color: var(--sapTextColor, #1d2d3e);
+}
+.root-cause-strip {
+  display: inline-flex !important;
+  width: auto !important;
+  font-weight: 600;
+}
+
+/* Evidence table */
+.evidence-table-wrapper { padding: 0 1rem 0.75rem; overflow-x: auto; }
+.fiori-evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.fiori-evidence-table thead tr {
+  background: var(--sapList_HeaderBackground, #f2f2f2);
+}
+.fiori-evidence-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  color: var(--sapList_HeaderTextColor, #32363a);
+  border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5);
+}
+.fiori-evidence-table td {
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5);
+  vertical-align: top;
+}
+.fiori-evidence-table tr.row-available { background: transparent; }
+.fiori-evidence-table tr.row-missing { background: #fffbf0; }
+.fiori-evidence-table code {
+  background: var(--sapField_Background, #f5f6f7);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  font-family: 'Courier New', monospace;
+}
+.evidence-detail {
+  color: var(--sapContent_LabelColor, #6a6d73);
+  max-width: 400px;
+}
+
+/* Actions table */
+.actions-table-wrapper { padding: 0 1rem 0.75rem; overflow-x: auto; }
+.fiori-actions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.fiori-actions-table thead tr {
+  background: var(--sapList_HeaderBackground, #f2f2f2);
+}
+.fiori-actions-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-weight: 600;
+  color: var(--sapList_HeaderTextColor, #32363a);
+  border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5);
+}
+.fiori-actions-table td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5);
+  vertical-align: middle;
+}
+.action-rank {
+  font-weight: 700;
+  color: var(--sapBrandColor, #0070f2);
+  text-align: center;
+  width: 40px;
+}
+.action-desc {
+  color: var(--sapTextColor, #1d2d3e);
+  max-width: 300px;
+}
+.fiori-actions-table code {
+  background: var(--sapField_Background, #f5f6f7);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  font-family: 'Courier New', monospace;
+}
+
+/* Full report accordion */
+.full-report-card { }
+.report-sections {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--sapList_BorderColor, #e5e5e5);
+}
+.report-section { border-bottom: 1px solid var(--sapList_BorderColor, #e5e5e5); }
+.report-section--empty .report-section-header { opacity: 0.65; }
+.report-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.report-section-header:hover { background: var(--sapList_HoverBackground, #f5f6f7); }
+.report-section-header.open { background: var(--sapList_SelectionBackgroundColor, #e8f1fd); }
+.section-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--sapBrandColor, #0070f2);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.report-section--empty .section-num { background: var(--sapNeutralColor, #bcc3ca); }
+.section-title {
+  flex: 1;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--sapTextColor, #1d2d3e);
+}
+.missing-badge { margin-left: auto; }
+.section-chevron {
+  color: var(--sapContent_IconColor, #6a6d73);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+.report-section-body {
+  padding: 0.5rem 1rem 0.75rem 2.85rem;
+}
+.section-missing-text {
+  font-size: 0.8rem;
+  color: var(--sapContent_LabelColor, #6a6d73);
+  font-style: italic;
+}
+
+/* Markdown rendering */
+.report-markdown { font-size: 0.85rem; line-height: 1.6; color: var(--sapTextColor, #1d2d3e); }
+.report-markdown p { margin: 0.35rem 0; }
+.report-markdown ul, .report-markdown ol { padding-left: 1.25rem; margin: 0.35rem 0; }
+.report-markdown li { margin: 0.2rem 0; }
+.report-markdown code {
+  background: var(--sapField_Background, #f5f6f7);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  font-family: 'Courier New', monospace;
+}
+.report-markdown pre {
+  background: var(--sapField_Background, #f5f6f7);
+  padding: 0.75rem;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+.report-markdown strong { color: var(--sapTextColor, #1d2d3e); }
+
+/* Footer */
+.report-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--sapContent_LabelColor, #6a6d73);
+  padding: 0.5rem 0 0.25rem;
+  border-top: 1px solid var(--sapList_BorderColor, #e5e5e5);
+}
+.report-footer-left { flex: 1; }
+.report-footer-actions { flex-shrink: 0; }
+
+/* Outcome feedback */
+.outcome-feedback {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: var(--sapInformativeBackground, #e8f2fd);
+  border-radius: 6px;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+.outcome-feedback--done {
+  background: var(--sapSuccessBackground, #f1fdf6);
+  color: #107e3e;
+  font-size: 0.85rem;
+}
+.outcome-label {
+  font-size: 0.82rem;
+  color: var(--sapTextColor, #1d2d3e);
+  font-weight: 500;
+}
+.outcome-buttons { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.outcome-tag { cursor: pointer; transition: opacity 0.15s; }
+.outcome-tag--selected { outline: 2px solid var(--sapBrandColor, #0070f2); border-radius: 4px; }
+
+/* Lineage card */
+.lineage-card { }
+
+/* Print styles */
+@media print {
+  .report-footer-actions,
+  .outcome-feedback,
+  .lineage-flow-wrapper { display: none; }
+  .report-view { padding: 0; }
+  .report-section-header { break-inside: avoid; }
+}
+
+/* ── PLANNER VIEW ── */
+.report-view--planner {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.planner-query-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1rem;
+  background: var(--sapHighlightColor, #0070f2);
+  border-radius: 6px;
+  color: #fff;
+  margin-bottom: 0.75rem;
+}
+.planner-query-text { flex: 1; font-size: 0.9rem; font-style: italic; }
+.planner-query-time  { font-size: 0.75rem; opacity: 0.75; flex-shrink: 0; }
+
+.planner-status-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  border: 1px solid var(--sapList_BorderColor, #e5e5e5);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+}
+.planner-status-left { flex: 1; }
+.planner-material-badge { display: flex; align-items: baseline; gap: 0.35rem; margin-bottom: 0.35rem; }
+.planner-material { font-size: 1.4rem; font-weight: 700; color: var(--sapTextColor, #1d2d3e); }
+.planner-plant-sep { color: #bcc3ca; font-size: 1.2rem; }
+.planner-plant { font-size: 1rem; color: var(--sapContent_LabelColor, #6a6d73); font-weight: 500; }
+.planner-incident { font-size: 0.85rem; color: var(--sapContent_LabelColor, #6a6d73); }
+.planner-status-right { text-align: right; flex-shrink: 0; }
+.planner-root-cause-badge {
+  border: 2px solid;
+  border-radius: 6px;
+  padding: 0.4rem 0.8rem;
+  margin-bottom: 0.3rem;
+  display: inline-block;
+}
+.planner-rc-label { font-size: 0.9rem; font-weight: 700; letter-spacing: 0.02em; }
+.planner-confidence { font-size: 0.75rem; font-weight: 500; }
+
+/* Action card */
+.planner-action-card {
+  background: #e8f2fd;
+  border: 2px solid #0070f2;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.planner-action-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0070f2;
+  margin-bottom: 0.75rem;
+}
+.planner-action-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.planner-action-num {
+  width: 24px; height: 24px;
+  background: #0070f2; color: #fff;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700;
+  flex-shrink: 0;
+}
+.planner-action-desc { font-size: 0.9rem; color: #1d2d3e; line-height: 1.5; }
+
+/* Summary section cards */
+.planner-section-card {
+  background: #fff;
+  border: 1px solid var(--sapList_BorderColor, #e5e5e5);
+  border-radius: 6px;
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 0.6rem;
+}
+.planner-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--sapContent_LabelColor, #6a6d73);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.5rem;
+}
+.planner-section-body {
+  font-size: 0.95rem;
+  color: #1d2d3e;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* Consultant view label */
+.report-view--consultant .context-header-tags::before {
+  content: 'Consultant View';
+  font-size: 0.72rem;
+  color: #0070f2;
+  background: #e8f2fd;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  font-weight: 600;
+  margin-right: 0.3rem;
+}

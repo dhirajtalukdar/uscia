@@ -1,0 +1,90 @@
+/* FioriShell */
+.fiori-shell-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.fiori-sub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  height: 44px;
+  background: var(--sapShellColor, #354a5e);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  gap: 1rem;
+}
+
+.fiori-sub-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.fiori-sub-header-right {
+  display: flex;
+  align-items: center;
+}
+
+.sidebar-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #fff;
+  padding: 0.3rem 0.65rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  transition: background 0.15s;
+}
+.sidebar-toggle-btn:hover { background: rgba(255,255,255,0.15); }
+
+.view-selector {
+  display: flex;
+  background: rgba(0,0,0,0.2);
+  border-radius: 6px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.7);
+  padding: 0.3rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.view-btn:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.view-btn.active { background: #0070f2; color: #fff; }
+.view-btn.planner-active { background: #0f6b3b; color: #fff; }
+
+.agent-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.agent-pill.online     { background: rgba(16,126,62,0.3);  color: #6dffa0; }
+.agent-pill.offline    { background: rgba(187,0,0,0.3);    color: #ffa0a0; }
+.agent-pill.connecting { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6); }
+.agent-pill-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.online  .agent-pill-dot { background: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
+.offline .agent-pill-dot { background: #e74c3c; }
+.connecting .agent-pill-dot { background: rgba(255,255,255,0.4); }

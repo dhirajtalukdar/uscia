@@ -1,0 +1,92 @@
+/* LineageFlow — IBP to aATP integration chain visualization */
+
+.lineage-flow-wrapper {
+  padding: 0.75rem 1rem;
+  background: var(--sapGroup_ContentBackground, #fff);
+  border-top: 1px solid var(--sapList_BorderColor, #e5e5e5);
+}
+
+.lineage-flow-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--sapContent_LabelColor, #6a6d73);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.6rem;
+}
+
+.lineage-flow {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.lineage-hop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+  padding: 0.4rem 0.5rem;
+  border: 2px solid;
+  border-radius: 6px;
+  flex-shrink: 0;
+  gap: 0.15rem;
+  transition: box-shadow 0.15s;
+}
+.lineage-hop:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+.hop-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.hop-sub {
+  font-size: 0.62rem;
+  color: var(--sapContent_LabelColor, #6a6d73);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.hop-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-top: 0.1rem;
+}
+
+.lineage-arrow {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 2px;
+}
+
+.lineage-legend {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  color: var(--sapContent_LabelColor, #6a6d73);
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}

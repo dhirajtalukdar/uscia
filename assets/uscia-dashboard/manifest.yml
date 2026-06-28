@@ -1,0 +1,19 @@
+---
+# CF manifest for uscia-dashboard.
+# Deploy with: cf push  (from assets/uscia-dashboard/)
+applications:
+  - name: uscia-dashboard
+    memory: 256M
+    disk_quota: 512M
+    instances: 1
+    buildpacks:
+      - nodejs_buildpack
+    command: node server.js
+    timeout: 120
+    health-check-type: http
+    health-check-http-endpoint: /health
+    env:
+      NODE_ENV: production
+      # USCIA agent A2A endpoint — already baked in as default but override here
+      # if the agent moves to a different route.
+      USCIA_AGENT_URL: https://uscia-agent.cfapps.us10.hana.ondemand.com

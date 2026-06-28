@@ -1,0 +1,19 @@
+/* Reset — let SAP Fiori Horizon control all visual tokens */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: var(--sapFontFamily, '72', '72full', Arial, Helvetica, sans-serif);
+  background: var(--sapBackgroundColor, #f5f6f7);
+  color: var(--sapTextColor, #1d2d3e);
+}
+
+/* Scrollbar styling — Fiori compatible */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--sapScrollBar_TrackColor, #c8cacc); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--sapScrollBar_FaceColor, #89919a); }

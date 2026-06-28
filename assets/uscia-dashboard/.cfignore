@@ -1,0 +1,11 @@
+# Exclude local node_modules — CF buildpack installs root deps during staging.
+# client/node_modules is not needed: the React app is pre-built into client/dist/.
+node_modules/
+client/node_modules/
+
+# Local dev / editor artefacts
+.env
+.env.*
+*.log
+.DS_Store
+Dockerfile

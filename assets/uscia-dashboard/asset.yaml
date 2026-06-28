@@ -1,0 +1,31 @@
+apiVersion: asset.sap/v1
+kind: Asset
+
+metadata:
+  name: uscia-dashboard
+  version: 1.0.0
+  description: >
+    USCIA Web UI Dashboard — chat-style forensic investigation interface for the
+    Unified Supply Chain Intelligence Agent. Displays 14-section forensic reports,
+    includes example incident queries, and proxies A2A requests to the deployed
+    USCIA agent on Cloud Foundry.
+
+type: base-ui
+
+container:
+  buildPath: .
+  port: 3000
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 15
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3

@@ -1,0 +1,26 @@
+{
+  "name": "uscia-dashboard",
+  "version": "1.0.0",
+  "description": "USCIA Web UI Dashboard — chat interface for supply chain forensic investigation",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "cd client && npm install && npm run build",
+    "start": "node server.js",
+    "dev": "concurrently \"node server.js\" \"cd client && npm run dev\""
+  },
+  "type": "module",
+  "dependencies": {
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "node-fetch": "^3.3.2",
+    "uuid": "^9.0.1",
+    "compression": "^1.7.4",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

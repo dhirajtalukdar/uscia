@@ -1,0 +1,15 @@
+apiVersion: solution.sap/v1
+kind: Solution
+
+metadata:
+  name: uscia-agent-71578
+  version: 1.0.0
+  description: >
+    Unified Supply Chain Intelligence Agent (USCIA) — autonomous cross-system
+    diagnostic agent for SAP IBP / S/4HANA / PP/DS planning failure investigation.
+    Delivers 14-section forensic reports in under 5 minutes with evidence-tagged
+    root cause classification and a persistent learning engine.
+
+assets:
+  - ref: ./assets/uscia-agent/asset.yaml
+  - ref: ./assets/uscia-dashboard/asset.yaml
