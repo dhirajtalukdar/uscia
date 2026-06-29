@@ -143,12 +143,103 @@ _INCIDENT_TYPES = [
     "bgRFC queue blockage",
 ]
 
+# Specific multi-word signal phrases per incident type — ordered by specificity.
+# A phrase only matches if ALL its words are present in the query.
+# Scored: more words in phrase = higher weight. Highest total score wins.
+_INCIDENT_SIGNALS: dict[str, list[str]] = {
+    "PP/DS scheduling failure": [
+        "unscheduled rrp3", "not scheduled ppds", "unscheduled ppds",
+        "ppds unscheduled", "rrp3 unscheduled", "ppds received",
+        "capacity constraint", "scheduling failure", "rrp3 capacity",
+        "ppds capacity", "ppds master data", "ppds scheduling",
+        "not reaching rrp3", "missing rrp3", "rrp3 missing",
+    ],
+    "planned order not reaching PP/DS RRP3": [
+        "not reaching rrp3", "not in rrp3", "missing rrp3",
+        "not transferred ppds", "cif failure", "not reaching ppds",
+        "in md04 not ppds", "md04 not rrp3",
+    ],
+    "CIF transfer failure": [
+        "cif failure", "cif transfer", "not transferred ppds",
+        "cif error", "apocif", "core interface",
+    ],
+    "bgRFC queue blockage": [
+        "bgrfc queue", "bgrfc blockage", "queue blocked", "sm58",
+        "queue stuck", "bgrfc stuck", "tRFC queue",
+    ],
+    "RTI/CPI message failure": [
+        "rti message", "cpi message", "integration message",
+        "sxmb_moni", "message failure", "message routing",
+        "ibp not transferred", "rti failure",
+    ],
+    "IBP planning job failure": [
+        "ibp job", "planning job", "ibp planning run", "ibp run",
+        "ibp job failed", "planning job failure",
+    ],
+    "aATP confirmation missing or incorrect": [
+        "atp confirmation", "atp missing", "atp incorrect",
+        "no confirmation", "co09", "atp check",
+    ],
+    "quantity or date inconsistency between IBP and S4HANA": [
+        "quantity inconsistency", "date inconsistency",
+        "different quantity", "wrong quantity", "quantity mismatch",
+        "date mismatch", "ibp quantity", "inconsistency ibp",
+    ],
+    "PIR exists but no planned order created": [
+        "pir exists", "pir created", "no planned order",
+        "pir but no order", "demand exists no order",
+    ],
+    "planned order missing in MD04": [
+        "missing md04", "not in md04", "md04 missing",
+        "not visible md04", "not appearing md04",
+    ],
+}
+
+# Stop-words that should not contribute to matching
+_STOP_WORDS = {"the", "a", "an", "is", "are", "was", "were", "for", "of",
+               "in", "on", "at", "to", "and", "or", "but", "it", "its",
+               "this", "that", "with", "from", "by", "be", "been", "has",
+               "have", "had", "do", "did", "not", "no", "i", "we", "you",
+               "my", "our", "their", "there", "here", "why", "how", "what",
+               "which", "when", "so", "if", "about", "after", "before"}
+
 
 def _detect_incident_type(query: str) -> str:
+    """
+    Detect incident type using scored phrase matching — NOT single-keyword first-match.
+
+    Each incident type has a list of specific signal phrases. A phrase matches only
+    when ALL its words are present in the query. Score = number of matched words
+    across all matching phrases for that incident type. Highest score wins.
+
+    This prevents 'planned' in 'PP/DS received the planned order but unscheduled'
+    from incorrectly matching 'planned order missing in MD04'.
+    """
     q = query.lower()
+    q_words = set(w.strip(".,?!;:") for w in q.split()) - _STOP_WORDS
+
+    scores: dict[str, int] = {}
+    for incident_type, phrases in _INCIDENT_SIGNALS.items():
+        score = 0
+        for phrase in phrases:
+            phrase_words = phrase.split()
+            if all(w in q_words for w in phrase_words):
+                # Multi-word phrase match — weight by phrase length (more specific = higher score)
+                score += len(phrase_words) * 2
+        if score > 0:
+            scores[incident_type] = score
+
+    if scores:
+        best = max(scores, key=lambda k: scores[k])
+        logger.debug("incident_type detection: scores=%s, best=%s", scores, best)
+        return best
+
+    # Fallback: original keyword scan (but now last resort)
     for t in _INCIDENT_TYPES:
-        if any(kw in q for kw in t.split()):
+        meaningful_words = [w for w in t.split() if w not in _STOP_WORDS and len(w) > 3]
+        if meaningful_words and all(w in q for w in meaningful_words):
             return t
+
     return "planned order missing in MD04"
 
 
@@ -594,7 +685,7 @@ class SampleAgent:
 
         # ── LLM narration ─────────────────────────────────────────────────────
         llm = await self._get_llm()
-        narration = await narrate_findings(classification, graph, ctx, llm=llm)
+        narration = await narrate_findings(classification, graph, ctx, llm=llm, user_query=query)
 
         # ── L4 pattern detection (non-blocking) ───────────────────────────────
         incident_id = str(uuid.uuid4())

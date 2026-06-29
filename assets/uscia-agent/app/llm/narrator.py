@@ -54,43 +54,27 @@ _INCIDENT_KEY_SYSTEMS = {
 }
 
 
-_SYSTEM_PROMPT = """You are a senior SAP supply chain forensic consultant generating an investigation report.
+_SYSTEM_PROMPT = """You are a senior SAP supply chain forensic consultant. You are responding directly to a user who described a specific problem. Your report must:
 
-LANGUAGE RULES -- this is critical:
-1. NEVER use internal API service names like S4HANA_PLANNED_ORDER, S4HANA_MATERIAL_PLANNING, SAP_CPI etc.
-   Instead use functional SAP terms:
-   - S4HANA_PLANNED_ORDER -> "Planned Orders in MD04 / S/4HANA MRP"
-   - S4HANA_MATERIAL_PLANNING -> "Material Master MRP configuration (MM03/MM02)"
-   - S4HANA_PIR -> "Planned Independent Requirements (PIR) in MD61/MD62"
-   - S4HANA_PPDS_STOCK -> "PP/DS Resource Utilization (RRP3)"
-   - S4HANA_PPDS_CONSTRAINTS -> "PP/DS Flexible Constraints"
-   - S4HANA_PPDS_CONFIG -> "Material Master MRP Issues & PP/DS Configuration (MM02 MRP2 tab)"
-   - S4HANA_APPLICATION_LOGS -> "SLG1 Application Logs (APOCIF / CIF Transfer Logs)"
-   - S4HANA_BGRFC_QUEUE -> "Business Event Queue (bgRFC / BEH Queue)"
-   - S4HANA_ATP -> "Product Allocation / aATP"
-   - IBP_SUPPLY -> "IBP Supply Planning (IBP Monitor)"
-   - SAP_CPI -> "SAP Integration Suite / CPI message routing (SXMB_MONI)"
-   - SAP_PIPO -> "SAP PI/PO message monitoring"
-   - CLOUD_ALM -> "SAP Cloud ALM integration health"
+1. ACKNOWLEDGE THE USER'S STATED SCENARIO FIRST — start by repeating back what the user said they observed, then compare it to what the evidence shows.
 
-2. EVIDENCE-FIRST: Only state findings supported by the evidence payload. If a field value exists, cite it exactly.
-   If record_count is 0 -- say "no [functional name] records found for material X plant Y".
+2. SURFACE CONTRADICTIONS EXPLICITLY — if the user says "PP/DS received the order" but evidence shows no orders in PP/DS, say this clearly:
+   "You mentioned that the order reached PP/DS scheduling. However, our live evidence shows no planned orders in MD04 and no scheduling records in PP/DS for material X, plant Y. This contradiction has two possible explanations: (a) the order may exist in a date range outside our query window — please provide the planned order number to narrow the search, or (b) the order was recently deleted or consumed."
 
-3. FUNCTIONAL DIAGNOSIS: When material master data is missing/incomplete, explain:
-   - What configuration is required (e.g. "Advanced Planning checkbox in MM02 -> MRP 2 tab must be enabled for PP/DS integration")
-   - What SAP transaction to use (MM02, CURTO_SIMU, SMQ1, SLG1, /SAPAPO/RRP3 etc.)
-   - What the business impact is (orders not transferred, scheduling not happening)
+3. ASK FOLLOW-UP QUESTIONS when:
+   - User mentioned a specific order but didn't provide the number → ask for it
+   - Evidence found multiple planned orders → ask which one they're investigating
+   - Evidence contradicts user's stated context → ask for clarification before concluding
+   Format follow-up questions as: "To investigate further, could you provide: [specific question]?"
 
-4. CONSULTANT VIEW: Technical, precise, cite actual field values and transactions. Include:
-   - Exact field values from evidence (MRPType='PD', count=0 etc.)
-   - Specific SAP transactions for each check
-   - The diagnostic chain (what to check and in what order)
+4. CITE ACTUAL DATA — state what was found, not "systems affected":
+   - 0 records → "No planned orders found in MD04 for material X, plant Y in the queried date range"
+   - MRPType found → "Material master shows MRP Type PD — make-to-stock planning is configured"
+   - bgRFC entries → describe the actual event types found and whether any relate to this material
 
-5. PLANNER VIEW: Plain business English. No SAP jargon, no transactions codes.
-   Focus on: What is wrong? What is the impact on production/supply? What needs to happen?
-   3-4 sentences max per section.
-
-6. All 14 sections mandatory. Use [No data available for this section] only when truly nothing can be said.
+5. CONSULTANT VIEW: Technical, specific field values, SAP transactions, diagnostic chain.
+6. PLANNER VIEW: 2-3 sentences max per section. Plain English. What is wrong, what is the impact, what to do.
+7. All 14 sections mandatory. Plain text only in JSON values.
 """
 
 _14_SECTIONS = [
@@ -254,6 +238,7 @@ async def narrate_findings(
     graph: EvidenceGraph,
     ctx: InvestigationContext,
     llm=None,
+    user_query: str = "",
 ) -> NarrationResult:
     """
     Generate Consultant and Planner view narrations via SAP AI Core LLM.
@@ -317,22 +302,35 @@ async def narrate_findings(
                     f"{', '.join(ctx.kg_relevant_systems[:4])}\n"
                 )
 
+        # Inject user's original query so LLM can acknowledge and compare against evidence
+        user_context_block = ""
+        if user_query:
+            user_context_block = (
+                f"\nUSER'S ORIGINAL QUERY (what they described):\n\"{user_query}\"\n\n"
+                "IMPORTANT: Compare the user's stated scenario to the evidence above. "
+                "If there is a contradiction (e.g. user says 'order is in PP/DS' but evidence shows no PP/DS records), "
+                "acknowledge this explicitly in the executive summary and ask a clarifying follow-up question. "
+                "Never ignore what the user told you.\n\n"
+            )
+
         prompt = (
             f"Generate a forensic supply chain investigation report based ONLY on the evidence below.\n\n"
             f"Evidence from live SAP systems:\n{evidence_json}\n\n"
+            f"{user_context_block}"
             f"{kg_context_block}"
             f"{focus_hint}\n"
             "Rules:\n"
-            "- NEVER use API service names in the report. Use functional SAP terms (see system prompt).\n"
+            "- Start by acknowledging what the user described, then state what the evidence shows.\n"
+            "- If evidence contradicts the user's stated context, say so explicitly and ask for clarification.\n"
+            "- NEVER use API service names. Use functional SAP terms (Planned Orders in MD04, PP/DS scheduling, etc.).\n"
             "- Cite actual field values when present (MRPType, record counts, etc.).\n"
-            "- When PP/DS config data shows ProductionSchedulingProfile is blank, explicitly state this means "
-            "PP/DS scheduling integration is not configured and instruct: check Advanced Planning checkbox "
-            "in MM02 -> MRP 2 tab (field MARC-MTVFP, not available via API -- manual check required).\n"
-            "- For MISSING_DATA systems: explain what FUNCTIONAL capability could not be verified and give the SAP transaction.\n\n"
+            "- If PP/DS config shows ProductionSchedulingProfile blank: state PP/DS integration not configured, "
+            "check MM02 MRP 2 tab for Advanced Planning checkbox.\n"
+            "- For MISSING systems: state what could not be verified and give the SAP transaction to check manually.\n\n"
             "Return ONLY a JSON object with exactly two keys: 'consultant_view' and 'planner_view'.\n"
             f"Each must be a JSON object with these exact 14 keys: {_14_SECTIONS}.\n"
-            "Plain text only inside values -- no markdown. Consultant view: technical + transactions. "
-            "Planner view: plain business English only, max 3-4 sentences per section."
+            "Plain text only -- no markdown. Consultant view: technical + SAP transactions. "
+            "Planner view: plain English only, max 3 sentences per section."
         )
 
         messages = [
