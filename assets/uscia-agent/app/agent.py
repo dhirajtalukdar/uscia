@@ -418,73 +418,69 @@ def _is_predictive_scan_request(query: str) -> bool:
     ])
 
 
-def _extract_user_premise(query: str) -> dict:
+# ── LLM-based premise detection ───────────────────────────────────────────────
+# This uses the AI Core LLM (GPT-4o) to reason about whether the user has stated
+# a premise about SAP system state that requires clarification BEFORE running the
+# full 12-system investigation. No hardcoded phrases — pure language understanding.
+
+_PREMISE_DETECTION_PROMPT = """You are a senior SAP supply chain consultant analysing a user's query.
+
+The user described a problem. Decide whether they have stated a SPECIFIC PREMISE about SAP system state that you must verify or clarify BEFORE running a full investigation.
+
+A premise requires clarification when:
+1. The user claims a specific system already has data (e.g., "the order is in PP/DS", "MRP ran", "CIF transferred the order") — you need to know WHICH specific order/job/run to verify
+2. The user mentions a specific scheduling/integration failure but doesn't give the unique identifier (planned order number, IBP job ID, CIF queue ID) needed to trace it
+3. There may be multiple matching records — you need a discriminator to investigate the right one
+
+A premise does NOT require clarification when:
+- The user is asking a generic "why is X missing" question with material/plant only — that's a normal investigation
+- The user already provided the identifier (e.g., order number 1000045678 in the query)
+- The query is exploratory, not asserting a specific system state
+
+Reply with a JSON object only, no markdown, no code fences. The exact JSON keys are: needs_clarification (boolean), user_claim (string — short summary of what the user asserted, empty string if none), question_to_ask (string — EXACT conversational question to ask, natural, professional, max 2 sentences, references SAP transactions MD04, RRP3 etc. where helpful, empty string if needs_clarification is false).
+
+User query: {QUERY_PLACEHOLDER}
+"""
+
+
+async def _llm_detect_premise(query: str, llm) -> dict:
     """
-    Detect when the user has stated a premise about system state that needs verification.
-    Returns a dict with:
-      - 'has_premise': bool
-      - 'premise_type': str (what the user claims)
-      - 'clarification_needed': str (what to ask before running)
+    Use the LLM to detect whether the user has stated a premise that needs
+    a clarifying question before running the full investigation.
 
-    Examples:
-      "PP/DS received the order but it is unscheduled" -> ask for planned order number
-      "IBP generated the plan but it's not in MD04" -> ask for IBP EXTERNID or order number
-      "The order is in MD04 but not in RRP3" -> ask for planned order number
+    Returns dict with keys: needs_clarification (bool), user_claim (str),
+    question_to_ask (str). Falls back to {needs_clarification: False} on any error.
     """
-    q = query.lower()
-    result = {"has_premise": False, "premise_type": "", "clarification_needed": ""}
+    if llm is None:
+        return {"needs_clarification": False, "user_claim": "", "question_to_ask": ""}
 
-    # User claims order IS in PP/DS but has a problem
-    if any(p in q for p in ["ppds received", "pp/ds received", "received by ppds",
-                             "in ppds but", "in rrp3 but", "rrp3 received",
-                             "ppds has the order", "in pp/ds but"]):
-        result.update({
-            "has_premise": True,
-            "premise_type": "order_in_ppds",
-            "clarification_needed": (
-                "You mentioned that PP/DS received the planned order. "
-                "To investigate the scheduling failure directly, could you provide the **planned order number**?\n\n"
-                "This will let me trace exactly which order reached PP/DS and why it wasn't scheduled. "
-                "You can find it in MD04 or /SAPAPO/RRP3."
-            ),
-        })
+    try:
+        from langchain_core.messages import HumanMessage
+        # Use simple string replacement — .format() trips on { } in example JSON
+        prompt = _PREMISE_DETECTION_PROMPT.replace("{QUERY_PLACEHOLDER}", f'"{query}"')
+        messages = [HumanMessage(content=prompt)]
 
-    # User claims order IS in MD04 but not reaching PP/DS
-    elif any(p in q for p in ["in md04 but not", "exists in md04 but", "md04 but not ppds",
-                               "md04 but not rrp3", "md04 but not reaching",
-                               "order is there but", "order exists but not"]):
-        result.update({
-            "has_premise": True,
-            "premise_type": "order_in_md04_not_ppds",
-            "clarification_needed": (
-                "You mentioned the order is in MD04 but not reaching PP/DS. "
-                "To trace the CIF transfer, could you share the **planned order number** from MD04?\n\n"
-                "This will let me check the exact CIF transfer status and SLG1 log entries for that order."
-            ),
-        })
+        try:
+            response = await llm.ainvoke(messages)
+        except (NotImplementedError, AttributeError):
+            response = llm.invoke(messages)
 
-    # User claims IBP ran but nothing in S/4HANA
-    elif any(p in q for p in ["ibp ran but", "ibp planning ran", "ibp generated",
-                               "ibp ran without error", "planning job ran"]):
-        result.update({
-            "has_premise": True,
-            "premise_type": "ibp_ran_no_s4",
-            "clarification_needed": (
-                "You mentioned the IBP planning job ran. "
-                "Could you provide the **IBP planning job ID or run date**, and the **planning version** (e.g. 000)?\n\n"
-                "This will let me check the IBP supply output and trace the RTI/CPI transfer to S/4HANA."
-            ),
-        })
+        text = response.content if hasattr(response, "content") else str(response)
+        # Strip markdown fences if present
+        text = text.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
 
-    return result
-
-
-
-    q = query.lower()
-    return any(kw in q for kw in [
-        "predictive scan", "pre-failure", "predict", "scan landscape",
-        "which materials", "proactive alert", "upcoming failures"
-    ])
+        data = json.loads(text)
+        return {
+            "needs_clarification": bool(data.get("needs_clarification", False)),
+            "user_claim": data.get("user_claim", ""),
+            "question_to_ask": data.get("question_to_ask", ""),
+        }
+    except Exception as exc:
+        logger.warning("LLM premise detection failed: %s — proceeding without gate", exc)
+        return {"needs_clarification": False, "user_claim": "", "question_to_ask": ""}
 
 
 def _is_outcome_recording(query: str) -> bool:
@@ -750,23 +746,30 @@ class SampleAgent:
         # Save context for multi-turn clarification
         self._last_ctx[context_id] = ctx
 
-        # ── M1b — User premise gate ───────────────────────────────────────────
-        # If the user stated a premise about system state (e.g. "PP/DS received the order")
-        # AND has not yet provided an order number or other key reference,
-        # ask conversationally BEFORE running the full 12-system investigation.
-        premise = _extract_user_premise(query)
-        has_order_ref = bool(ctx.continuity_keys.get("ordid") or
-                             re.search(r"\b\d{7,12}\b", query))  # order number in query
-        if premise["has_premise"] and not has_order_ref:
-            logger.info("M1b: user premise detected (%s) — asking for clarification before M2",
-                        premise["premise_type"])
-            # Store the premise type so the next turn knows what we asked about
-            ctx.continuity_keys["_premise_type"] = premise["premise_type"]
-            self._last_ctx[context_id] = ctx
-            return AgentResult(
-                content=premise["clarification_needed"],
-                requires_input=True,
-            )
+        # ── M1b — LLM-based user premise gate ─────────────────────────────────
+        # Uses GPT-4o to reason about whether the user has stated a premise about
+        # SAP system state that needs clarification BEFORE the full investigation.
+        # Pure language understanding — handles any phrasing, no hardcoded patterns.
+        # Skipped if the user already provided a planned order number in the query.
+        has_order_ref = bool(ctx.continuity_keys.get("ordid"))
+        # Also skip the gate on follow-up turns — if we already asked once and the user
+        # gave a brief reply (likely the order number / job ID), proceed to investigation.
+        already_asked = bool(prior and prior.continuity_keys.get("_premise_asked"))
+
+        if not has_order_ref and not already_asked:
+            llm = await self._get_llm()
+            premise = await _llm_detect_premise(query, llm)
+            if premise["needs_clarification"] and premise["question_to_ask"]:
+                logger.info("M1b: LLM detected premise — claim=%r — asking clarification",
+                            premise["user_claim"])
+                # Mark that we asked, so the next turn doesn't re-trigger the gate
+                ctx.continuity_keys["_premise_asked"] = "1"
+                ctx.continuity_keys["_premise_claim"] = premise["user_claim"]
+                self._last_ctx[context_id] = ctx
+                return AgentResult(
+                    content=premise["question_to_ask"],
+                    requires_input=True,
+                )
 
         # ── M2 — Parallel evidence collection ────────────────────────────────
         payload = await collect_evidence(ctx, s4=self._s4_client, ibp=self._ibp_client)
