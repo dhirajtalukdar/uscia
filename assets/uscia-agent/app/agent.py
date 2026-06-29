@@ -307,7 +307,23 @@ def _extract_context_from_query(
 
     # ── Incident type: KG grounding wins over regex if confidence is HIGH/MEDIUM ──
     # This is the core improvement: KG understands "nothing in RRP3" means
-    # "planned order not reaching PP/DS RRP3" — regex alone cannot do this.
+    # Carry over material/plant from prior context if not provided in current query
+    if prior_context:
+        if material == "UNKNOWN" and prior_context.material != "UNKNOWN":
+            material = prior_context.material
+        if plant == "UNKNOWN" and prior_context.plant != "UNKNOWN":
+            plant = prior_context.plant
+
+    # Pick up planned order number from query (7-12 digits) — used as ordid continuity key
+    # This handles follow-up replies like "order number is 1000045678"
+    ordid_match = re.search(r"\b(\d{7,12})\b", query)
+    continuity_keys: dict = {}
+    if ordid_match:
+        continuity_keys["ordid"] = ordid_match.group(1)
+    # Carry forward premise type from prior context
+    if prior_context and prior_context.continuity_keys.get("_premise_type"):
+        continuity_keys["_premise_type"] = prior_context.continuity_keys["_premise_type"]
+
     if grounding and grounding.confidence in ("HIGH", "MEDIUM"):
         incident_type = grounding.incident_type
     else:
@@ -320,7 +336,7 @@ def _extract_context_from_query(
         date_from=date_match[0] if len(date_match) > 0 else default_from,
         date_to=date_match[1] if len(date_match) > 1 else default_to,
         incident_type=incident_type,
-        continuity_keys={},
+        continuity_keys=continuity_keys,
         kg_process_context=grounding.process_context if grounding else "",
         kg_relevant_systems=grounding.relevant_systems if grounding else [],
         kg_disambiguated_terms=grounding.disambiguated_terms if grounding else {},
@@ -395,6 +411,75 @@ def _format_approval_request(
 
 
 def _is_predictive_scan_request(query: str) -> bool:
+    q = query.lower()
+    return any(kw in q for kw in [
+        "predictive scan", "pre-failure", "predict", "scan landscape",
+        "which materials", "proactive alert", "upcoming failures"
+    ])
+
+
+def _extract_user_premise(query: str) -> dict:
+    """
+    Detect when the user has stated a premise about system state that needs verification.
+    Returns a dict with:
+      - 'has_premise': bool
+      - 'premise_type': str (what the user claims)
+      - 'clarification_needed': str (what to ask before running)
+
+    Examples:
+      "PP/DS received the order but it is unscheduled" -> ask for planned order number
+      "IBP generated the plan but it's not in MD04" -> ask for IBP EXTERNID or order number
+      "The order is in MD04 but not in RRP3" -> ask for planned order number
+    """
+    q = query.lower()
+    result = {"has_premise": False, "premise_type": "", "clarification_needed": ""}
+
+    # User claims order IS in PP/DS but has a problem
+    if any(p in q for p in ["ppds received", "pp/ds received", "received by ppds",
+                             "in ppds but", "in rrp3 but", "rrp3 received",
+                             "ppds has the order", "in pp/ds but"]):
+        result.update({
+            "has_premise": True,
+            "premise_type": "order_in_ppds",
+            "clarification_needed": (
+                "You mentioned that PP/DS received the planned order. "
+                "To investigate the scheduling failure directly, could you provide the **planned order number**?\n\n"
+                "This will let me trace exactly which order reached PP/DS and why it wasn't scheduled. "
+                "You can find it in MD04 or /SAPAPO/RRP3."
+            ),
+        })
+
+    # User claims order IS in MD04 but not reaching PP/DS
+    elif any(p in q for p in ["in md04 but not", "exists in md04 but", "md04 but not ppds",
+                               "md04 but not rrp3", "md04 but not reaching",
+                               "order is there but", "order exists but not"]):
+        result.update({
+            "has_premise": True,
+            "premise_type": "order_in_md04_not_ppds",
+            "clarification_needed": (
+                "You mentioned the order is in MD04 but not reaching PP/DS. "
+                "To trace the CIF transfer, could you share the **planned order number** from MD04?\n\n"
+                "This will let me check the exact CIF transfer status and SLG1 log entries for that order."
+            ),
+        })
+
+    # User claims IBP ran but nothing in S/4HANA
+    elif any(p in q for p in ["ibp ran but", "ibp planning ran", "ibp generated",
+                               "ibp ran without error", "planning job ran"]):
+        result.update({
+            "has_premise": True,
+            "premise_type": "ibp_ran_no_s4",
+            "clarification_needed": (
+                "You mentioned the IBP planning job ran. "
+                "Could you provide the **IBP planning job ID or run date**, and the **planning version** (e.g. 000)?\n\n"
+                "This will let me check the IBP supply output and trace the RTI/CPI transfer to S/4HANA."
+            ),
+        })
+
+    return result
+
+
+
     q = query.lower()
     return any(kw in q for kw in [
         "predictive scan", "pre-failure", "predict", "scan landscape",
@@ -664,6 +749,24 @@ class SampleAgent:
         )
         # Save context for multi-turn clarification
         self._last_ctx[context_id] = ctx
+
+        # ── M1b — User premise gate ───────────────────────────────────────────
+        # If the user stated a premise about system state (e.g. "PP/DS received the order")
+        # AND has not yet provided an order number or other key reference,
+        # ask conversationally BEFORE running the full 12-system investigation.
+        premise = _extract_user_premise(query)
+        has_order_ref = bool(ctx.continuity_keys.get("ordid") or
+                             re.search(r"\b\d{7,12}\b", query))  # order number in query
+        if premise["has_premise"] and not has_order_ref:
+            logger.info("M1b: user premise detected (%s) — asking for clarification before M2",
+                        premise["premise_type"])
+            # Store the premise type so the next turn knows what we asked about
+            ctx.continuity_keys["_premise_type"] = premise["premise_type"]
+            self._last_ctx[context_id] = ctx
+            return AgentResult(
+                content=premise["clarification_needed"],
+                requires_input=True,
+            )
 
         # ── M2 — Parallel evidence collection ────────────────────────────────
         payload = await collect_evidence(ctx, s4=self._s4_client, ibp=self._ibp_client)

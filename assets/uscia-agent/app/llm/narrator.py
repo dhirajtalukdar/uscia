@@ -302,26 +302,17 @@ async def narrate_findings(
                     f"{', '.join(ctx.kg_relevant_systems[:4])}\n"
                 )
 
-        # Inject user's original query so LLM can acknowledge and compare against evidence
-        user_context_block = ""
-        if user_query:
-            user_context_block = (
-                f"\nUSER'S ORIGINAL QUERY (what they described):\n\"{user_query}\"\n\n"
-                "IMPORTANT: Compare the user's stated scenario to the evidence above. "
-                "If there is a contradiction (e.g. user says 'order is in PP/DS' but evidence shows no PP/DS records), "
-                "acknowledge this explicitly in the executive summary and ask a clarifying follow-up question. "
-                "Never ignore what the user told you.\n\n"
-            )
+        # If an order number was provided, include it so the LLM focuses on it
+        ordid = ctx.continuity_keys.get("ordid", "")
+        ordid_hint = f"\nUser provided planned order number: {ordid} — cite this order specifically in the report." if ordid else ""
 
         prompt = (
             f"Generate a forensic supply chain investigation report based ONLY on the evidence below.\n\n"
             f"Evidence from live SAP systems:\n{evidence_json}\n\n"
-            f"{user_context_block}"
+            f"{ordid_hint}"
             f"{kg_context_block}"
             f"{focus_hint}\n"
             "Rules:\n"
-            "- Start by acknowledging what the user described, then state what the evidence shows.\n"
-            "- If evidence contradicts the user's stated context, say so explicitly and ask for clarification.\n"
             "- NEVER use API service names. Use functional SAP terms (Planned Orders in MD04, PP/DS scheduling, etc.).\n"
             "- Cite actual field values when present (MRPType, record counts, etc.).\n"
             "- If PP/DS config shows ProductionSchedulingProfile blank: state PP/DS integration not configured, "
