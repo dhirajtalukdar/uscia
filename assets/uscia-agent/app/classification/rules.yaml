@@ -71,6 +71,26 @@ rules:
       s4_planned_orders_count: 0
       pir_count_zero: true
 
+  # ── RC004B: Advanced Planning flag OFF — PP/DS integration not active ────────
+  # Planned orders exist in MD04 but AdvancedPlanning=false confirmed via A_ProductPlant
+  # This fires BEFORE RC004 (scheduling failure) because it's a config root cause, not a
+  # scheduling failure — the material is simply not in the PP/DS integration scope.
+  - id: RC004B
+    name: PPDS_SCHEDULING_FAILURE
+    evidence_tag: CONFIRMED
+    confidence: HIGH
+    description: >
+      Planned orders exist in S/4HANA but AdvancedPlanning flag (MARC-MTVFP) is confirmed
+      as FALSE via A_ProductPlant OData (S4HANA_DSC). This material/plant is not integrated
+      with PP/DS — planned orders will never reach RRP3. Activate in MM02 → MRP 2 tab →
+      Advanced Planning checkbox, then rerun CIF initial load (CURTO_SIMU).
+    required_available:
+      - S4HANA_PLANNED_ORDER
+      - S4HANA_PPDS_CONFIG
+    conditions:
+      s4_planned_orders_count_gt: 0
+      advanced_planning_false: true
+
   # ── RC004: PP/DS scheduling failure ─────────────────────────────────────────
   # Planned orders exist in MD04 but PP/DS stock is empty → CIF or scheduling failure
   - id: RC004
@@ -100,7 +120,7 @@ rules:
       No CIF transfer evidence found in APOCIF logs. PP/DS transfer may be blocked.
       Check SMQ1 for qRFC queue entries (destination APOC*), SLG1/APOCIF for errors,
       and verify CIF Integration Model is active via CURTO_SIMU or /SAPAPO/CIF.
-      Advanced Planning checkbox (MARC-MTVFP) cannot be verified via OData — check MM02.
+      If AdvancedPlanning flag returned MISSING DATA, verify MM02 → MRP 2 tab manually.
     required_available:
       - S4HANA_PLANNED_ORDER
     required_missing:

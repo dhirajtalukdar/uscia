@@ -51,6 +51,10 @@ app.post('/api/a2a', async (req, res) => {
     const contextId = req.body.contextId || uuidv4();
     const userMessage = req.body.message || '';
 
+    // Pass contextId via params.message.contextId so the agent's stream()
+    // receives task.context_id == our sessionId, enabling per-session
+    // conversation history in the orchestrator.
+    // Do NOT pass taskId — the A2A framework rejects unknown task IDs.
     const rpcPayload = {
       jsonrpc: '2.0',
       id: uuidv4(),
@@ -59,7 +63,8 @@ app.post('/api/a2a', async (req, res) => {
         message: {
           messageId: uuidv4(),
           role: 'user',
-          parts: [{ kind: 'text', text: userMessage }]
+          parts: [{ kind: 'text', text: userMessage }],
+          contextId: contextId
         }
       }
     };

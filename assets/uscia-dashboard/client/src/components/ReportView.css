@@ -394,3 +394,19 @@
   font-weight: 600;
   margin-right: 0.3rem;
 }
+
+/* Merged subsections */
+.merged-subsection {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--sapList_BorderColor, #e5e5e5);
+}
+.merged-subsection:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+.merged-subsection-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--sapContent_LabelColor, #6a6d73);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+}

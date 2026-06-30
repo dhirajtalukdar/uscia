@@ -95,12 +95,19 @@ def _build_view(
 
     # Machine-readable system status block — three-state: has_data / no_data / missing
     # Systems that only return material-specific data (filtered by material+plant)
+    # S4HANA_PPDS_STOCK uses ResourceUtilizations which is NOT material-filtered —
+    # it returns plant-level capacity data. Only show as has_data if it contains
+    # material-relevant records (checked via record count > 0 AND root cause is not config error)
     _MATERIAL_SPECIFIC = {
         "S4HANA_PLANNED_ORDER", "S4HANA_MATERIAL_PLANNING", "S4HANA_PIR",
-        "S4HANA_PPDS_CONSTRAINTS",
+        "S4HANA_PPDS_CONSTRAINTS", "S4HANA_PPDS_CONFIG",
     }
-    # When material not found, all S4HANA operational systems show no_data
+    # Non-material-specific systems: return data regardless of whether material exists
+    _PLANT_LEVEL_SYSTEMS = {"S4HANA_PPDS_STOCK", "S4HANA_ATP", "S4HANA_BGRFC_QUEUE", "S4HANA_APPLICATION_LOGS"}
+
     material_not_found = classification.root_cause == "MATERIAL_NOT_FOUND"
+    # For config errors with 0 planned orders, PPDS and ATP data is not material-specific
+    planning_gap = classification.root_cause in {"MASTER_DATA_CONFIG_ERROR", "MATERIAL_NOT_FOUND", "IBP_PLANNING_GAP"}
 
     def _has_records(node) -> bool:
         if not node.raw_payload:
@@ -113,8 +120,12 @@ def _build_view(
     def _system_state(node) -> str:
         if node.status != "AVAILABLE":
             return "missing"
-        # If material not found, all S4HANA systems that should filter by material show no_data
+        # Material not found: all S4HANA systems → no_data
         if material_not_found and node.system_name.startswith("S4HANA_"):
+            return "no_data"
+        # Planning gap (config error, no planned orders): PPDS/ATP show plant-level data
+        # not specific to this material → show as no_data to avoid false positives
+        if planning_gap and node.system_name in _PLANT_LEVEL_SYSTEMS:
             return "no_data"
         if _has_records(node):
             return "has_data"

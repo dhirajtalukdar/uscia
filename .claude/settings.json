@@ -1,29 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cf push*)",
-      "Bash(cf app*)",
-      "Bash(cf logs*)",
-      "Bash(cf env*)",
-      "Bash(cf services*)",
-      "Bash(cf set-env*)",
-      "Bash(cf restart*)",
-      "Bash(npm run build*)",
-      "Bash(npm install*)",
-      "Bash(python3 -c*)",
-      "Bash(grep*)",
-      "Bash(find*)",
-      "Bash(ls*)",
-      "Bash(cat*)",
-      "Bash(sleep*)",
-      "Bash(wait*)",
-      "Bash(echo*)",
-      "Bash(cd*)",
-      "Bash(cf target*)",
-      "Bash(cf apps*)",
-      "Bash(python3 -m*)",
-      "Bash(node *)",
-      "Bash(npm run *)"
+      "Bash(*)"
     ]
   }
 }

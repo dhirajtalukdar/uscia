@@ -4,21 +4,14 @@ S/4HANA MRP Master Data Issues tool.
 Uses PPH_MRP_MASTER_DATA_ISSUE_SRV / C_MRPMasterDataIssueTP to retrieve
 MRP planning exceptions and master data issues for a material/plant.
 
-This is the OData equivalent of the MRP Issues/Exceptions log — it shows
-whether MRP encountered any problems during the last planning run, including:
-  - Missing MRP type, lot size, lead time configuration
-  - BOM/routing issues
-  - Successful planning (info message)
-  - Hard errors blocking planning
+Also queries:
+  - API_PRODUCT_SRV/A_ProductPlant for AdvancedPlanning (MARC-MTVFP) and
+    ProductionSchedulingProfile (MARC-FEVOR). A_ProductPlant exposes
+    AdvancedPlanning on S/4HANA 2021+ systems (confirmed on DSC via S4HANA_DSC
+    destination, port 44301). Falls back gracefully on older releases.
+  - API_PRODUCT_SRV/A_ProductWorkScheduling for ProductionSchedulingProfile.
 
 Criticality values: 1 = Error, 2 = Warning, 3 = Information/Success
-
-Also queries A_ProductWorkScheduling for ProductionSchedulingProfile (MARC-FEVOR).
-NOTE: MARC-MTVFP (Advanced Planning checkbox for PP/DS) is NOT exposed in public
-OData on S/4HANA. Diagnosis for PP/DS non-integration must reference manual checks:
-  - MM02/MM03 -> MRP 2 tab -> Advanced Planning checkbox
-  - Transaction CURTO_SIMU or /SAPAPO/CIF for CIF Integration Model status
-  - SMQ1 for qRFC outbound queue status (not available via public OData)
 """
 from __future__ import annotations
 import logging
@@ -60,7 +53,7 @@ async def get_ppds_config_and_mrp_issues(
         s4 = S4Client()
 
     try:
-        # Run both queries in parallel
+        # Run all three queries in parallel
         mrp_issues_task = s4.get(
             f"{_PPH_MRP_ROOT}/C_MRPMasterDataIssueTP",
             params={
@@ -74,6 +67,21 @@ async def get_ppds_config_and_mrp_issues(
                 "$format": "json",
             },
         )
+        # A_ProductPlant exposes AdvancedPlanning (MARC-MTVFP) on S/4HANA 2021+.
+        # This is the authoritative OData field — no manual check needed when it returns data.
+        product_plant_task = s4.get(
+            f"{_PRODUCT_SRV_ROOT}/A_ProductPlant",
+            params={
+                "$filter": f"Product eq '{material}' and Plant eq '{plant}'",
+                "$select": (
+                    "Product,Plant,AdvancedPlanning,MRPType,MRPController,"
+                    "ProductionSchedulingProfile,PlannedDeliveryDurationInDays,"
+                    "SafetyDuration,PlanningTimeFence"
+                ),
+                "$top": 1,
+                "$format": "json",
+            },
+        )
         work_sched_task = s4.get(
             f"{_PRODUCT_SRV_ROOT}/A_ProductWorkScheduling",
             params={
@@ -84,7 +92,9 @@ async def get_ppds_config_and_mrp_issues(
             },
         )
 
-        mrp_result, ws_result = await asyncio.gather(mrp_issues_task, work_sched_task, return_exceptions=True)
+        mrp_result, pp_result, ws_result = await asyncio.gather(
+            mrp_issues_task, product_plant_task, work_sched_task, return_exceptions=True
+        )
 
         # Process MRP issues
         mrp_issues = []
@@ -103,7 +113,29 @@ async def get_ppds_config_and_mrp_issues(
                     "timestamp": item.get("CreationDateTime", ""),
                 })
 
-        # Process work scheduling (ProductionSchedulingProfile)
+        # Process A_ProductPlant — AdvancedPlanning (MARC-MTVFP) + MRP config
+        advanced_planning_flag = None   # None = not exposed on this system
+        advanced_planning_source = "NOT_AVAILABLE"
+        mrp_type_from_plant = ""
+        planning_time_fence = ""
+        safety_duration = ""
+        planned_delivery_duration = ""
+
+        if not isinstance(pp_result, Exception) and not pp_result.get("error"):
+            pp_items = pp_result.get("results") or pp_result.get("value") or []
+            if pp_items:
+                first = pp_items[0]
+                raw_ap = first.get("AdvancedPlanning")
+                if raw_ap is not None:
+                    # Field present — true = checkbox ON (PP/DS active), false = OFF
+                    advanced_planning_flag = bool(raw_ap) if isinstance(raw_ap, bool) else (str(raw_ap).lower() in ("true", "x", "1"))
+                    advanced_planning_source = "A_ProductPlant"
+                mrp_type_from_plant = first.get("MRPType", "")
+                planning_time_fence = str(first.get("PlanningTimeFence", ""))
+                safety_duration = str(first.get("SafetyDuration", ""))
+                planned_delivery_duration = str(first.get("PlannedDeliveryDurationInDays", ""))
+
+        # Process work scheduling (ProductionSchedulingProfile fallback)
         production_scheduling_profile = ""
         if not isinstance(ws_result, Exception) and not ws_result.get("error"):
             ws_items = ws_result.get("results") or ws_result.get("value") or []
@@ -115,21 +147,34 @@ async def get_ppds_config_and_mrp_issues(
         warnings = [i for i in mrp_issues if i["criticality"] == "2"]
         infos = [i for i in mrp_issues if i["criticality"] == "3"]
 
+        # Advanced Planning finding — [CONFIRMED] when data available, [MISSING DATA] otherwise
+        if advanced_planning_flag is True:
+            ap_finding = "[CONFIRMED] AdvancedPlanning=true — PP/DS integration active for this material/plant (MARC-MTVFP=X)"
+            ap_note = "Advanced Planning checkbox is ON — this material/plant is integrated with PP/DS."
+        elif advanced_planning_flag is False:
+            ap_finding = "[CONFIRMED] AdvancedPlanning=false — PP/DS integration NOT active (MARC-MTVFP not set)"
+            ap_note = "Advanced Planning checkbox is OFF — planned orders will NOT reach PP/DS/RRP3. Set in MM02 → MRP 2 tab."
+        else:
+            ap_finding = "[MISSING DATA] AdvancedPlanning field not returned by A_ProductPlant — check MM02/MM03 → MRP 2 tab manually"
+            ap_note = "A_ProductPlant did not return AdvancedPlanning field on this system. Manual check required: MM02 → MRP 2 tab → Advanced Planning checkbox (MARC-MTVFP)."
+
         result_data = {
             "material": material,
             "plant": plant,
+            "advanced_planning": advanced_planning_flag,
+            "advanced_planning_source": advanced_planning_source,
+            "advanced_planning_finding": ap_finding,
+            "advanced_planning_note": ap_note,
+            "mrp_type": mrp_type_from_plant,
+            "planning_time_fence": planning_time_fence,
+            "safety_duration": safety_duration,
+            "planned_delivery_duration": planned_delivery_duration,
+            "production_scheduling_profile": production_scheduling_profile,
             "mrp_issue_count": len(mrp_issues),
             "mrp_errors": errors,
             "mrp_warnings": warnings,
             "mrp_info": infos,
-            "production_scheduling_profile": production_scheduling_profile,
-            "production_scheduling_profile_note": (
-                "ProductionSchedulingProfile (MARC-FEVOR) controls production scheduling behaviour. "
-                "NOTE: The Advanced Planning checkbox (MARC-MTVFP) that controls PP/DS integration "
-                "is NOT available via public OData. Check MM02/MM03 -> MRP 2 tab manually."
-            ),
             "ppds_manual_checks": [
-                "MM02/MM03 -> MRP 2 tab -> Advanced Planning checkbox (MARC-MTVFP) — must be checked for PP/DS integration",
                 "Transaction CURTO_SIMU or /SAPAPO/CIF: verify CIF Integration Model is active and consistent for this material/plant",
                 "Transaction SMQ1: check qRFC outbound queue for destination APOC* — transfer messages should not be stuck",
                 "Transaction SLG1: object APOCIF, subobject plant — check for CIF transfer errors",
@@ -153,14 +198,10 @@ async def get_ppds_config_and_mrp_issues(
             ),
             "what_was_expected": (
                 f"PP/DS and MRP configuration diagnostics for material {material} / plant {plant}: "
-                "(1) Whether Advanced Planning (PP/DS) is activated on the material master "
-                "(field MARC-MTVFP = 'X'). "
-                "(2) Whether the CIF integration model includes this material/plant "
-                "(active model in CURTO_SIMU). "
-                "(3) qRFC outbound queue status (SMQ1 — queues APOC* for CIF). "
-                "(4) Recent CIF transfer errors in SLG1 (object APOCIF). "
-                "These are the four most common configuration gaps that cause PP/DS not to "
-                "receive planned orders from IBP."
+                "(1) AdvancedPlanning flag (MARC-MTVFP) from A_ProductPlant — queried via S4HANA_DSC destination. "
+                "(2) MRP type, planning time fence, safety duration from A_ProductPlant. "
+                "(3) MRP planning exceptions from PPH_MRP_MASTER_DATA_ISSUE_SRV. "
+                "(4) ProductionSchedulingProfile (MARC-FEVOR) from A_ProductWorkScheduling."
             ),
             "manual_investigation": (
                 f"RIGHT NOW — for material {material}, plant {plant}: "

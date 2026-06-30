@@ -158,6 +158,17 @@ def _check_conditions(rule: dict, payload: EvidencePayload) -> bool:
         if _count_items(pir_data) == 0:
             return False
 
+    # advanced_planning_false — AdvancedPlanning confirmed false via A_ProductPlant
+    if conds.get("advanced_planning_false"):
+        config_data = _node_data(payload, "S4HANA_PPDS_CONFIG")
+        # The tool returns a nested 'data' dict; handle both wrapped and unwrapped
+        inner = config_data.get("data", config_data)
+        ap_flag = inner.get("advanced_planning")
+        if ap_flag is None:
+            return False  # field not available — cannot confirm false
+        if ap_flag is not False and str(ap_flag).lower() not in ("false", "0", ""):
+            return False  # flag is true or indeterminate — condition not met
+
     # pir_count_zero: fire only when PIR count is 0
     if conds.get("pir_count_zero"):
         pir_data = _node_data(payload, "S4HANA_PIR")
@@ -235,7 +246,7 @@ def _material_exists_in_s4(payload: EvidencePayload) -> bool:
 # BPS-349: Production planning & scheduling  → PP/DS / MRP layer rules
 # BPS-327: Demand/supply alignment & transfer → IBP / CPI / bgRFC layer rules
 # NEUTRAL rules apply regardless of BP layer.
-_BP349_RULE_IDS: frozenset[str] = frozenset({"RC004", "RC005", "RC006"})
+_BP349_RULE_IDS: frozenset[str] = frozenset({"RC004", "RC004B", "RC005", "RC006"})
 _BP327_RULE_IDS: frozenset[str] = frozenset({"RC001", "RC002", "RC007"})
 _NEUTRAL_RULE_IDS: frozenset[str] = frozenset({"RC003", "RC003B", "RC008"})
 

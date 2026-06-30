@@ -287,7 +287,25 @@ def _extract_context_from_query(
 
     # ── Regex extraction — material, plant, dates ─────────────────────────────
     # Material: uppercase alphanumeric token 3-18 chars — must contain at least one letter
-    mat_match = re.search(r"\b([A-Z][A-Z0-9_-]{2,17}|[A-Z0-9_-]{2,17}[A-Z])\b", query)
+    # SAP terms (IBP, RTI, MRP, etc.) must NEVER be picked as material — extensive skip list
+    _SAP_SKIP = {
+        "IBP", "RTI", "CPI", "MRP", "CIF", "ATP", "PIR", "RRP", "RRP3", "MD04", "MD01", "MD02",
+        "MD61", "MD62", "MM02", "MM03", "MM01", "PPDS", "PPDS", "ERP", "SAP", "BTP", "EDI", "API",
+        "SLG1", "SMQ1", "SM58", "SXMB", "BAPI", "ORD", "BOM", "PLM", "S4", "S4HANA", "S4HC",
+        "APO", "APOC", "BEH", "BHE", "ALM", "DSO", "OData", "ODATA", "UTC", "GMT", "UoM",
+        "TLD", "TLM", "TRX", "WMS", "EWM", "LE", "FI", "CO", "FICO", "HR", "HCM", "BW", "BI",
+        "EXTERNID", "JOB", "JOBS", "STATUS", "ERROR", "NULL", "NONE", "ALL", "ANY", "DATA",
+        "USCIA", "MATERIAL", "PLANT", "ORDER", "ORDERS", "PLANNED", "FIRM",
+    }
+    _mat_candidates = re.findall(r"\b([A-Z][A-Z0-9_-]{2,17}|[A-Z0-9_-]{2,17}[A-Z])\b", query)
+    material = "UNKNOWN"
+    for cand in _mat_candidates:
+        # Skip SAP-known terms; require at least one digit OR underscore/hyphen to look like a material code
+        if cand in _SAP_SKIP:
+            continue
+        if any(c.isdigit() for c in cand) or "_" in cand or "-" in cand:
+            material = cand
+            break
     # Plant: exactly 2-4 digits after the word "plant" (or "location")
     plant_match = re.search(r"(?:plant|location)\s+([0-9]{2,4})\b", query, re.IGNORECASE)
     # Also check for standalone 2-4 digit codes when prior material exists
@@ -295,7 +313,6 @@ def _extract_context_from_query(
         plant_match = re.search(r"\b([0-9]{2,4})\b", query)
     date_match = re.findall(r"\d{4}-\d{2}-\d{2}", query)
 
-    material = mat_match.group(1) if mat_match else "UNKNOWN"
     plant = plant_match.group(1) if plant_match else "UNKNOWN"
 
     # Carry over material/plant from prior context if not found in this query
@@ -418,11 +435,204 @@ def _is_predictive_scan_request(query: str) -> bool:
     ])
 
 
-# ── LLM-based premise detection ───────────────────────────────────────────────
-# This uses the AI Core LLM (GPT-4o) to reason about whether the user has stated
-# a premise about SAP system state that requires clarification BEFORE running the
-# full 12-system investigation. No hardcoded phrases — pure language understanding.
+# ── LLM Conversational Orchestrator ──────────────────────────────────────────
+# Per-turn LLM reasoning that owns the conversation. On every user turn the LLM
+# sees the full conversation history and decides one of four actions:
+#   ASK            — need more info; ask a specific question and wait for reply
+#   INVESTIGATE    — have enough context; run full investigation
+#   INVESTIGATE_LIMITED — user can't/won't provide more; run with disclaimer
+#   CONTRADICTION  — user's statements contradict; ask for resolution
+# This replaces the one-shot premise gate with a real conversation loop.
 
+_ORCHESTRATOR_PROMPT = """You are USCIA, a senior SAP supply chain consultant having a conversation with a planner or consultant who has a planning failure problem.
+
+Your job each turn: decide what to do BEFORE running the full 14-system forensic investigation. You behave like a real consultant — asking the right questions until you have enough context to investigate effectively, OR proceeding with limited info if the user genuinely cannot answer more.
+
+ON EVERY TURN, decide ONE of these four actions:
+
+1. ASK — the user has not given you enough information yet to investigate effectively.
+   Examples of when to ASK:
+   - User says "Why is the planned order missing in MD04?" without specifying source — ask: is the order expected from IBP (RTI transfer), from MRP run, or from a CIF transfer from another system?
+   - User mentions a specific scheduling/integration failure but no planned order number or external ID
+   - User describes a problem but you don't know if they expect data from IBP or just S/4HANA
+   - Important context is missing that would change which systems you query
+
+   You can ASK multiple times across multiple turns. Keep asking specific, focused questions until you have what you need. Each question should be ONE thing, not a list.
+
+2. INVESTIGATE — you have enough context. Proceed with full investigation.
+   Examples: user gave material + plant + order source (IBP/MRP) + identifier, or confirmed they don't have an identifier and want general investigation, or provided enough detail that further questions wouldn't add diagnostic value.
+   IMPORTANT: If the user's message is a structured JSON object containing material, plant, and incident_type — always choose INVESTIGATE immediately. Structured queries already have full context.
+
+3. INVESTIGATE_LIMITED — user said they cannot provide more info, or asked you to proceed with what's available, or you've asked 2-3 times and they're refusing/unable to give details.
+   Examples: user says "I don't have an order number", "I can't find it", "just check what you can", "there are no orders that I can find".
+   In this mode you proceed with investigation BUT a disclaimer is prepended to the report stating which information was missing and how that limits the findings.
+
+4. CONTRADICTION — the user's current statement contradicts what they said earlier.
+   Example: turn 1 user says "PP/DS received the order", turn 3 user says "there are no orders I can find". Call out the contradiction conversationally and ask which is correct, or whether they want you to investigate the discrepancy itself.
+
+DECISION RULES:
+- If material AND plant are unknown — always ASK for them first (these are non-negotiable)
+- If user explicitly says "go ahead", "just proceed", "check anyway", "do what you can" — switch to INVESTIGATE_LIMITED
+- If user contradicts themselves and you haven't called it out yet — CONTRADICTION
+- After 3 unanswered questions on the same topic — switch to INVESTIGATE_LIMITED (don't badger)
+- Be context-aware: a follow-up like "0001" after asking for plant code IS a valid answer — recognise it
+
+QUESTION QUALITY:
+- One specific question per turn, not a checklist
+- Reference SAP context where relevant (MD04, RRP3, CIF, IBP RTI, EXTERNID, planned order number)
+- Conversational tone — like a colleague, not a form
+- 1-3 sentences max
+
+Reply with a JSON object only. No markdown, no code fences. Exact keys:
+  action: "ASK" | "INVESTIGATE" | "INVESTIGATE_LIMITED" | "CONTRADICTION"
+  message: string — for ASK/CONTRADICTION the conversational message to the user; for INVESTIGATE/INVESTIGATE_LIMITED empty string
+  limitations: string — for INVESTIGATE_LIMITED a one-sentence summary of what info was missing; otherwise empty
+  reasoning: string — one short sentence explaining why you chose this action (for logs)
+
+CRITICAL ATTRIBUTION RULES:
+- Conversation entries marked "USER:" are what the USER said
+- Conversation entries marked "AGENT:" are what YOU (the agent) said or reported
+- When writing your message, NEVER say "Earlier, you (the user) mentioned X" if X actually came from an AGENT message. Findings, root causes, classifications come from YOUR investigation — phrase them as "We found X" or "Our investigation showed X" or "The data indicates X". Only attribute statements to the user if they appear in USER lines.
+- If the user contradicts what THEY previously said (not what the investigation found), call that out as a user contradiction. If the user disagrees with an investigation finding, treat that as new information to investigate — not as them contradicting themselves.
+
+CONVERSATION SO FAR:
+{HISTORY_PLACEHOLDER}
+
+CURRENT USER MESSAGE:
+{QUERY_PLACEHOLDER}
+"""
+
+
+def _format_conversation_history(history: list) -> str:
+    """Format conversation turns for the orchestrator prompt.
+    Uses explicit role labels so the LLM never confuses 'what the agent found'
+    with 'what the user said'.
+    """
+    if not history:
+        return "(no prior turns — this is the first message)"
+    lines = []
+    for turn in history:
+        role = turn.get("role", "user")
+        content = turn.get("content", "")
+        # Compact agent reports — show what the agent FOUND (not what user said)
+        if role == "agent" and "## Root Cause:" in content:
+            rc_match = re.search(r"##\s+Root Cause:\s*([^\n\[]+)", content)
+            mat_match = re.search(r"##\s+Investigation:\s*([^\n]+)", content)
+            content = (
+                f"[AGENT INVESTIGATION REPORT — investigation found: "
+                f"{mat_match.group(1).strip() if mat_match else ''} — "
+                f"Root Cause discovered by agent: {rc_match.group(1).strip() if rc_match else 'unknown'}. "
+                f"This is the AGENT's finding, NOT something the user said.]"
+            )
+        elif role == "agent" and len(content) > 400:
+            content = content[:400] + "…"
+        # Use clear labels
+        label = "USER (what they typed)" if role == "user" else "AGENT (what I said/reported)"
+        lines.append(f"{label}: {content}")
+    return "\n".join(lines)
+
+
+async def _llm_orchestrate(
+    query: str,
+    history: list,
+    ctx: "InvestigationContext",
+    llm,
+) -> dict:
+    """
+    Per-turn conversational orchestrator. The LLM sees the full conversation
+    and decides whether to ASK, INVESTIGATE, INVESTIGATE_LIMITED, or CONTRADICTION.
+
+    Returns dict with keys: action, message, limitations, reasoning.
+    Falls back to action=INVESTIGATE on any error so the agent never gets stuck.
+    """
+    fallback = {"action": "INVESTIGATE", "message": "", "limitations": "", "reasoning": "orchestrator unavailable"}
+    if llm is None:
+        return fallback
+
+    try:
+        from langchain_core.messages import HumanMessage
+        history_str = _format_conversation_history(history)
+        prompt = (
+            _ORCHESTRATOR_PROMPT
+            .replace("{HISTORY_PLACEHOLDER}", history_str)
+            .replace("{QUERY_PLACEHOLDER}", query)
+        )
+        messages = [HumanMessage(content=prompt)]
+
+        try:
+            response = await llm.ainvoke(messages)
+        except (NotImplementedError, AttributeError):
+            response = llm.invoke(messages)
+
+        text = response.content if hasattr(response, "content") else str(response)
+        text = text.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
+
+        data = json.loads(text)
+        action = data.get("action", "INVESTIGATE").upper()
+        if action not in {"ASK", "INVESTIGATE", "INVESTIGATE_LIMITED", "CONTRADICTION"}:
+            action = "INVESTIGATE"
+        return {
+            "action": action,
+            "message": data.get("message", "").strip(),
+            "limitations": data.get("limitations", "").strip(),
+            "reasoning": data.get("reasoning", "").strip(),
+        }
+    except Exception as exc:
+        logger.warning("LLM orchestrator failed: %s — defaulting to INVESTIGATE", exc)
+        return fallback
+
+
+# ── LLM Canonical Query Summariser ────────────────────────────────────────────
+# Multi-turn conversations may have form-filling replies ("0001", "yes", "M-2222")
+# that aren't the actual question. This helper asks the LLM to extract the
+# underlying investigation question across the full conversation. Used by the
+# dashboard to display the real "Investigation Query" in the report card.
+
+_CANONICAL_QUERY_PROMPT = """Below is a conversation between a user and an SAP supply chain consultant agent.
+
+The user described a problem, possibly across multiple turns. Some user messages are short clarification replies (like "0001", "yes", "M-2222 plant 3000") — these are NOT the real question.
+
+Your job: extract the ONE canonical question the user is actually trying to get answered. Write it as a single, complete, natural-language question. Preserve material numbers, plant codes, and any specific details the user mentioned. If the conversation has only one substantive question, return it as-is (cleaned up to a full sentence).
+
+Reply with ONLY the question as a plain string. No JSON, no quotes, no preamble. Maximum 200 characters.
+
+CONVERSATION:
+{HISTORY_PLACEHOLDER}
+"""
+
+
+async def _llm_summarise_canonical_query(history: list, llm) -> str:
+    """
+    Extract the canonical investigation question from the conversation history.
+    Returns a single clean question string, or empty string on failure.
+    """
+    if llm is None or not history:
+        return ""
+    try:
+        from langchain_core.messages import HumanMessage
+        history_str = _format_conversation_history(history)
+        prompt = _CANONICAL_QUERY_PROMPT.replace("{HISTORY_PLACEHOLDER}", history_str)
+        messages = [HumanMessage(content=prompt)]
+        try:
+            response = await llm.ainvoke(messages)
+        except (NotImplementedError, AttributeError):
+            response = llm.invoke(messages)
+        text = response.content if hasattr(response, "content") else str(response)
+        text = text.strip().strip('"').strip("'").strip()
+        # Sanity bound the length
+        if len(text) > 240:
+            text = text[:237] + "..."
+        return text
+    except Exception as exc:
+        logger.warning("LLM canonical query summariser failed: %s", exc)
+        return ""
+
+
+# Legacy single-shot premise detector — kept for reference / fallback paths but
+# no longer called by the main flow. The orchestrator above replaces it.
 _PREMISE_DETECTION_PROMPT = """You are a senior SAP supply chain consultant analysing a user's query.
 
 The user described a problem. Decide whether they have stated a SPECIFIC PREMISE about SAP system state that you must verify or clarify BEFORE running a full investigation.
@@ -444,19 +654,12 @@ User query: {QUERY_PLACEHOLDER}
 
 
 async def _llm_detect_premise(query: str, llm) -> dict:
-    """
-    Use the LLM to detect whether the user has stated a premise that needs
-    a clarifying question before running the full investigation.
-
-    Returns dict with keys: needs_clarification (bool), user_claim (str),
-    question_to_ask (str). Falls back to {needs_clarification: False} on any error.
-    """
+    """Legacy single-shot premise detector. Superseded by _llm_orchestrate."""
     if llm is None:
         return {"needs_clarification": False, "user_claim": "", "question_to_ask": ""}
 
     try:
         from langchain_core.messages import HumanMessage
-        # Use simple string replacement — .format() trips on { } in example JSON
         prompt = _PREMISE_DETECTION_PROMPT.replace("{QUERY_PLACEHOLDER}", f'"{query}"')
         messages = [HumanMessage(content=prompt)]
 
@@ -466,7 +669,6 @@ async def _llm_detect_premise(query: str, llm) -> dict:
             response = llm.invoke(messages)
 
         text = response.content if hasattr(response, "content") else str(response)
-        # Strip markdown fences if present
         text = text.strip()
         if text.startswith("```"):
             text = re.sub(r"^```(?:json)?\s*", "", text)
@@ -534,6 +736,9 @@ class SampleAgent:
         self._last_ctx: dict[str, "InvestigationContext"] = {}
         # Pending approval gate: keyed by context_id; expires after APPROVAL_TTL_SECONDS
         self._pending_approvals: dict[str, PendingApproval] = {}
+        # Conversation history per context_id — used by the LLM orchestrator
+        # Trimmed to last 20 turns to keep prompt size bounded.
+        self._conversations: dict[str, list[dict]] = {}
 
     @property
     def s4_client(self) -> S4Client:
@@ -705,71 +910,73 @@ class SampleAgent:
         grounding = await ground_investigation_context(query)
 
         # ── M1 — Context capture ──────────────────────────────────────────────
+        # Pull material/plant from query (regex), carry over from prior turn,
+        # detect incident type. Do NOT clarify here — the orchestrator decides.
         prior = self._last_ctx.get(context_id)
         ctx = _extract_context_from_query(query, prior_context=prior, grounding=grounding)
-
-        # ── M1 clarification — ask before running evidence collection ─────────
-        missing_fields = []
-        if ctx.material == "UNKNOWN":
-            missing_fields.append("material number")
-        if ctx.plant == "UNKNOWN":
-            missing_fields.append("plant code")
-
-        if missing_fields:
-            fields_str = " and ".join(missing_fields)
-            # Save what we have so far — material/plant already known won't be asked again
-            self._last_ctx[context_id] = ctx
-            logger.info(
-                "M1.missed: investigation context incomplete — missing_fields=%s, reason=not provided in query",
-                missing_fields,
-            )
-            return AgentResult(
-                content=(
-                    f"To investigate this planning failure I need a bit more information.\n\n"
-                    f"Could you provide the **{fields_str}**?\n\n"
-                    f"For example:\n"
-                    f"- _Why is the planned order for material **MAT-1234** plant **1000** missing in MD04?_\n\n"
-                    f"You can also include a date range if you know when the issue started."
-                ),
-                requires_input=True,
-            )
-
-        logger.info(
-            "M1.achieved: investigation context captured — material=%s, plant=%s, version=%s, "
-            "date_range=%s to %s, incident_type=%s, continuity_keys=%s, "
-            "kg_grounding=%s, kg_confidence=%s, kg_bp_ids=%s, terms_disambiguated=%d",
-            ctx.material, ctx.plant, ctx.planning_version,
-            ctx.date_from, ctx.date_to, ctx.incident_type, ctx.continuity_keys,
-            "LIVE" if not ctx.kg_fallback_used else "FALLBACK",
-            ctx.kg_confidence, ctx.kg_bp_ids, len(ctx.kg_disambiguated_terms),
-        )
-        # Save context for multi-turn clarification
+        # Save context (even partial) so the next turn can carry it forward
         self._last_ctx[context_id] = ctx
 
-        # ── M1b — LLM-based user premise gate ─────────────────────────────────
-        # Uses GPT-4o to reason about whether the user has stated a premise about
-        # SAP system state that needs clarification BEFORE the full investigation.
-        # Pure language understanding — handles any phrasing, no hardcoded patterns.
-        # Skipped if the user already provided a planned order number in the query.
-        has_order_ref = bool(ctx.continuity_keys.get("ordid"))
-        # Also skip the gate on follow-up turns — if we already asked once and the user
-        # gave a brief reply (likely the order number / job ID), proceed to investigation.
-        already_asked = bool(prior and prior.continuity_keys.get("_premise_asked"))
+        logger.info(
+            "M1: context — material=%s, plant=%s, incident_type=%s, ordid=%s",
+            ctx.material, ctx.plant, ctx.incident_type, ctx.continuity_keys.get("ordid", ""),
+        )
 
-        if not has_order_ref and not already_asked:
-            llm = await self._get_llm()
-            premise = await _llm_detect_premise(query, llm)
-            if premise["needs_clarification"] and premise["question_to_ask"]:
-                logger.info("M1b: LLM detected premise — claim=%r — asking clarification",
-                            premise["user_claim"])
-                # Mark that we asked, so the next turn doesn't re-trigger the gate
-                ctx.continuity_keys["_premise_asked"] = "1"
-                ctx.continuity_keys["_premise_claim"] = premise["user_claim"]
-                self._last_ctx[context_id] = ctx
-                return AgentResult(
-                    content=premise["question_to_ask"],
-                    requires_input=True,
-                )
+        # ── M1b — Per-turn Conversational Orchestrator ────────────────────────
+        # Skip orchestrator entirely for structured JSON queries — they already have
+        # full context (material, plant, incident_type) and don't need clarification.
+        _is_structured = bool(re.search(r'\{.*"material".*"plant".*\}', query, re.DOTALL) and
+                              ctx.material != "UNKNOWN" and ctx.plant != "UNKNOWN")
+
+        llm = await self._get_llm()
+        history = self._conversations.setdefault(context_id, [])
+
+        # Bypass orchestrator for structured JSON queries — full context already provided
+        if _is_structured:
+            logger.info("orchestrator: bypassed — structured JSON query with full context")
+            orchestration = {"action": "INVESTIGATE", "message": "", "limitations": "", "reasoning": "structured JSON"}
+        else:
+            orchestration = await _llm_orchestrate(query, history, ctx, llm)
+        action = orchestration["action"]
+        logger.info("orchestrator: action=%s reasoning=%r", action, orchestration["reasoning"])
+
+        # Record this user turn in history regardless of action
+        history.append({"role": "user", "content": query})
+
+        if action == "ASK" or action == "CONTRADICTION":
+            # Conversational reply — record agent message and return; do not run investigation
+            agent_msg = orchestration["message"] or (
+                "Could you give me a bit more detail so I can investigate accurately?"
+            )
+            history.append({"role": "agent", "content": agent_msg})
+            # Trim history to last 20 turns
+            self._conversations[context_id] = history[-20:]
+            return AgentResult(content=agent_msg, requires_input=True)
+
+        # Safety net: if orchestrator chose INVESTIGATE but material/plant truly missing,
+        # we must NOT call collect_evidence (it would query 'UNKNOWN'). Downgrade to LIMITED.
+        if ctx.material == "UNKNOWN" or ctx.plant == "UNKNOWN":
+            logger.warning(
+                "orchestrator chose %s but material=%s plant=%s — downgrading to LIMITED",
+                action, ctx.material, ctx.plant,
+            )
+            agent_msg = (
+                "I'd like to help, but I still need at least the material number and plant code to investigate. "
+                "Could you share those — even approximately?"
+            )
+            history.append({"role": "agent", "content": agent_msg})
+            self._conversations[context_id] = history[-20:]
+            return AgentResult(content=agent_msg, requires_input=True)
+
+        # INVESTIGATE or INVESTIGATE_LIMITED — proceed; remember limitations for the report
+        limited_disclaimer = ""
+        if action == "INVESTIGATE_LIMITED" and orchestration["limitations"]:
+            limited_disclaimer = (
+                "> ⚠️ **Limited Investigation Notice**\n"
+                f"> {orchestration['limitations']}\n"
+                "> The findings below are based on the information available — "
+                "some diagnostic paths could not be verified. Please review accordingly.\n\n"
+            )
 
         # ── M2 — Parallel evidence collection ────────────────────────────────
         payload = await collect_evidence(ctx, s4=self._s4_client, ibp=self._ibp_client)
@@ -863,14 +1070,26 @@ class SampleAgent:
                 confidence=classification.confidence,
                 executable_actions=executable_actions,
             )
+            # Use LLM to extract the canonical investigation question (dashboard reads this)
+            canonical_q = await _llm_summarise_canonical_query(history, llm)
+            canonical_tag = f"\n<!-- USCIA_CANONICAL_QUERY: {canonical_q} -->\n" if canonical_q else ""
+            final_msg = limited_disclaimer + gate_message + canonical_tag
+            # Record this turn in conversation history (orchestrator sees it next turn)
+            history.append({"role": "agent", "content": final_msg})
+            self._conversations[context_id] = history[-20:]
             return AgentResult(
-                content=gate_message,
+                content=final_msg,
                 requires_input=True,
                 approval_id=context_id,
             )
 
         # No executable actions — deliver report immediately
-        return AgentResult(content=report.consultant_view + outcome_hint)
+        canonical_q = await _llm_summarise_canonical_query(history, llm)
+        canonical_tag = f"\n<!-- USCIA_CANONICAL_QUERY: {canonical_q} -->\n" if canonical_q else ""
+        final_report = limited_disclaimer + report.consultant_view + outcome_hint + canonical_tag
+        history.append({"role": "agent", "content": final_report})
+        self._conversations[context_id] = history[-20:]
+        return AgentResult(content=final_report)
 
     async def stream(
         self,

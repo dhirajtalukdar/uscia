@@ -424,48 +424,71 @@ export default function ReportView({ query, content, timestamp, view }) {
         </Card>
       )}
 
-      {/* ── Full 14-section report panels ── */}
+      {/* ── 5-section merged report ── */}
       <Card className="full-report-card">
         <CardHeader
-          titleText={view === 'planner' ? 'Planner Summary' : 'Full Forensic Report'}
-          subtitleText={view === 'planner' ? 'Key business sections' : 'All 14 sections — click to expand'}
+          titleText={view === 'planner' ? 'Investigation Summary' : 'Forensic Report'}
+          subtitleText="Click sections to expand"
           avatar={<ui5-icon name="detail-view" />}
         />
         <div className="report-sections">
-          {sectionsToRender
-            .sort((a, b) => a.num - b.num)
-            .map((section) => {
-              const isOpen = expandedSections.has(section.num);
-              const isEmpty = !section.body.trim() || section.body.includes('[MISSING DATA: section could not be generated');
-              return (
-                <div key={section.num} className={`report-section${isEmpty ? ' report-section--empty' : ''}`}>
-                  <div
-                    className={`report-section-header${isOpen ? ' open' : ''}`}
-                    onClick={() => toggleSection(section.num)}
-                  >
-                    <span className="section-num">{section.num}</span>
-                    <span className="section-title">{section.title}</span>
-                    {isEmpty && <Tag colorScheme="1" className="missing-badge">LLM required</Tag>}
-                    <ui5-icon
-                      name={isOpen ? 'navigation-up-arrow' : 'navigation-down-arrow'}
-                      class="section-chevron"
-                    />
-                  </div>
-                  {isOpen && (
-                    <div className="report-section-body">
-                      {isEmpty
-                        ? <p className="section-missing-text">⚠️ This section requires LLM narration (GPT-4o via AI Core). The deterministic classification is complete — connect AI Core to generate full narrative.</p>
-                        : <div className="report-markdown">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {enhanceTags(section.body)}
-                            </ReactMarkdown>
-                          </div>
-                      }
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <MergedSection
+            num={1}
+            title="Executive Summary"
+            icon="information"
+            defaultOpen={true}
+            body={sections['s1']?.body}
+            sections={[]}
+          />
+          <MergedSection
+            num={2}
+            title="Key Findings"
+            icon="sys-find"
+            defaultOpen={true}
+            body={null}
+            sections={[
+              { label: 'Confirmed Findings', body: sections['s6']?.body },
+              { label: 'Probable Causes',    body: sections['s7']?.body },
+              { label: 'Missing Data Gaps',  body: sections['s8']?.body },
+            ]}
+          />
+          <MergedSection
+            num={3}
+            title="Root Cause & Diagnostic Evidence"
+            icon="alert"
+            defaultOpen={false}
+            body={null}
+            sections={[
+              { label: 'Issue Classification',   body: sections['s2']?.body },
+              { label: 'Affected System Boundary', body: sections['s3']?.body },
+              { label: 'Evidence Timeline',      body: sections['s4']?.body },
+              { label: 'Evidence Graph Summary', body: sections['s5']?.body },
+            ]}
+          />
+          <MergedSection
+            num={4}
+            title="Recommended Actions & Business Impact"
+            icon="task"
+            defaultOpen={true}
+            body={null}
+            sections={[
+              { label: 'Recommended Actions',       body: sections['s9']?.body },
+              { label: 'Business Impact',            body: sections['s12']?.body },
+              { label: 'Escalation Path',            body: sections['s13']?.body },
+              { label: 'Preventive Recommendation', body: sections['s14']?.body },
+            ]}
+          />
+          <MergedSection
+            num={5}
+            title="Technical Reference"
+            icon="developer-settings"
+            defaultOpen={false}
+            body={null}
+            sections={[
+              { label: 'SAP Objects to Check',      body: sections['s10']?.body },
+              { label: 'Logs & Transactions',        body: sections['s11']?.body },
+            ]}
+          />
         </div>
       </Card>
 
@@ -544,6 +567,42 @@ function OutcomeFeedback({ incidentId, actions }) {
         >
           Submit Feedback
         </Button>
+      )}
+    </div>
+  );
+}
+
+/* ─── MergedSection: collapsible panel with optional sub-sections ─── */
+function MergedSection({ num, title, icon, defaultOpen, body, sections }) {
+  const [open, setOpen] = React.useState(defaultOpen);
+  const hasContent = body?.trim() || sections.some(s => s.body?.trim());
+  if (!hasContent) return null;
+
+  return (
+    <div className="report-section">
+      <div className={`report-section-header${open ? ' open' : ''}`} onClick={() => setOpen(v => !v)}>
+        <span className="section-num">{num}</span>
+        <span className="section-title">{title}</span>
+        <ui5-icon name={open ? 'navigation-up-arrow' : 'navigation-down-arrow'} class="section-chevron" />
+      </div>
+      {open && (
+        <div className="report-section-body">
+          {/* Single body */}
+          {body?.trim() && (
+            <div className="report-markdown">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{enhanceTags(body)}</ReactMarkdown>
+            </div>
+          )}
+          {/* Sub-sections */}
+          {sections.filter(s => s.body?.trim()).map((s, i) => (
+            <div key={i} className="merged-subsection">
+              <div className="merged-subsection-title">{s.label}</div>
+              <div className="report-markdown">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{enhanceTags(s.body)}</ReactMarkdown>
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
