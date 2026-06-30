@@ -1,15 +1,19 @@
 """
-S/4HANA MRP Master Data Issues tool.
+S/4HANA MRP Master Data Issues + PP/DS config tool.
 
-Uses PPH_MRP_MASTER_DATA_ISSUE_SRV / C_MRPMasterDataIssueTP to retrieve
-MRP planning exceptions and master data issues for a material/plant.
+Evidence sources (run in parallel):
+  1. QL8 (primary s4 client, S4HANA destination):
+     - PPH_MRP_MASTER_DATA_ISSUE_SRV / C_MRPMasterDataIssueTP — MRP exceptions
+     - API_PRODUCT_SRV / A_ProductWorkScheduling — ProductionSchedulingProfile (FEVOR)
 
-Also queries:
-  - API_PRODUCT_SRV/A_ProductPlant for AdvancedPlanning (MARC-MTVFP) and
-    ProductionSchedulingProfile (MARC-FEVOR). A_ProductPlant exposes
-    AdvancedPlanning on S/4HANA 2021+ systems (confirmed on DSC via S4HANA_DSC
-    destination, port 44301). Falls back gracefully on older releases.
-  - API_PRODUCT_SRV/A_ProductWorkScheduling for ProductionSchedulingProfile.
+  2. DSC (via s4-mcp-server cc3-708, S4HANA_DSC destination):
+     - PP_MRP_COCKPIT_SRV / C_MRPMaterialVH — full MRP config: MRPType, MRPController,
+       MRPGroup, PlanningTimeFenceInDays, MRPSafetyDuration, LotSizingProcedure
+       (confirmed working on DSC with SLOT-EWMS4-2443/1710)
+     - API_PRODUCT_SRV / A_ProductSupplyPlanning — extended planning config
+
+  PPSKZ (PP/DS Planning Procedure) is NOT available via OData on any service.
+  Requires SQL path (TCP BTP destination to DSC HANA DB) — deferred pending Basis.
 
 Criticality values: 1 = Error, 2 = Warning, 3 = Information/Success
 """
@@ -60,16 +64,17 @@ async def get_ppds_config_and_mrp_issues(
     3. API_PRODUCT_SRV/A_ProductWorkScheduling (DSC): ProductionSchedulingProfile (MARC-FEVOR)
     """
     import asyncio
+    from tools.mcp_s4_client import execute_odata_query_json as mcp_query
 
     if s4 is None:
         from s4hana_client import S4Client
         s4 = S4Client()
 
-    # DSC client — separate destination for A_ProductPlant AdvancedPlanning query
+    # DSC client — separate destination for A_ProductWorkScheduling
     dsc = _get_dsc_client()
 
     try:
-        # Run all three queries in parallel
+        # Run all queries in parallel — QL8 + DSC OData + DSC MCP
         mrp_issues_task = s4.get(
             f"{_PPH_MRP_ROOT}/C_MRPMasterDataIssueTP",
             params={
@@ -83,21 +88,17 @@ async def get_ppds_config_and_mrp_issues(
                 "$format": "json",
             },
         )
-        # A_ProductPlant via DSC — exposes AdvancedPlanning (MARC-MTVFP) on S/4HANA 2021+.
-        # Uses separate dsc client (S4HANA_DSC destination) not the primary QL8 s4 client.
-        product_plant_task = dsc.get(
-            f"{_PRODUCT_SRV_ROOT}/A_ProductPlant",
-            params={
-                "$filter": f"Product eq '{material}' and Plant eq '{plant}'",
-                "$select": (
-                    "Product,Plant,AdvancedPlanning,MRPType,MRPController,"
-                    "ProductionSchedulingProfile,PlannedDeliveryDurationInDays,"
-                    "SafetyDuration,PlanningTimeFence"
-                ),
-                "$top": 1,
-                "$format": "json",
-            },
+        # DSC MCP: PP_MRP_COCKPIT_SRV/C_MRPMaterialVH — full MRP config confirmed working
+        # Fields: MRPType, MRPController, MRPGroup, PlanningTimeFenceInDays, MRPSafetyDuration
+        mcp_mrp_task = mcp_query(
+            f"PP_MRP_COCKPIT_SRV/C_MRPMaterialVH"
+            f"?$filter=MaterialID eq '{material}' and MRPPlant eq '{plant}'"
+            f"&$select=MaterialID,MRPPlant,MRPType,MRPTypeName,MRPController,"
+            f"MRPGroup,PlanningTimeFenceInDays,MRPSafetyDuration,"
+            f"MaterialLozSizeProcedure,MRPArea,MRPPlanningSegmentType"
+            f"&$top=1"
         )
+        # DSC OData: A_ProductWorkScheduling — ProductionSchedulingProfile (FEVOR)
         work_sched_task = dsc.get(
             f"{_PRODUCT_SRV_ROOT}/A_ProductWorkScheduling",
             params={
@@ -109,10 +110,13 @@ async def get_ppds_config_and_mrp_issues(
         )
 
         mrp_result, pp_result, ws_result = await asyncio.gather(
-            mrp_issues_task, product_plant_task, work_sched_task, return_exceptions=True
+            mrp_issues_task, mcp_mrp_task, work_sched_task, return_exceptions=True
+        )
+        mrp_result, mcp_result, ws_result = results_tuple = await asyncio.gather(
+            mrp_issues_task, mcp_mrp_task, work_sched_task, return_exceptions=True
         )
 
-        # Process MRP issues
+        # Process QL8 MRP issues
         mrp_issues = []
         if not isinstance(mrp_result, Exception) and not mrp_result.get("error"):
             items = mrp_result.get("results") or mrp_result.get("value") or []
@@ -129,29 +133,37 @@ async def get_ppds_config_and_mrp_issues(
                     "timestamp": item.get("CreationDateTime", ""),
                 })
 
-        # Process A_ProductPlant — AdvancedPlanning (MARC-MTVFP) + MRP config
-        advanced_planning_flag = None   # None = not exposed on this system
+        # Process DSC MCP — PP_MRP_COCKPIT_SRV/C_MRPMaterialVH
+        mcp_mrp_data = {}
+        mcp_mrp_source = "NOT_AVAILABLE"
+        if not isinstance(mcp_result, Exception) and mcp_result.get("status") == "AVAILABLE":
+            inner = mcp_result.get("data", {})
+            items = inner.get("value") or inner.get("results") or []
+            if items and isinstance(items, list):
+                mcp_mrp_data = items[0]
+                mcp_mrp_source = "PP_MRP_COCKPIT_SRV_via_MCP"
+                logger.info(
+                    "PPDS_CONFIG: MCP PP_MRP_COCKPIT_SRV returned MRPType=%s MRPController=%s for %s/%s",
+                    mcp_mrp_data.get("MRPType", ""), mcp_mrp_data.get("MRPController", ""),
+                    material, plant,
+                )
+
+        # Derive MRP config from MCP result (preferred) or fall back to empty
+        mrp_type_from_mcp = mcp_mrp_data.get("MRPType", "")
+        mrp_type_name = mcp_mrp_data.get("MRPTypeName", "")
+        mrp_controller = mcp_mrp_data.get("MRPController", "")
+        mrp_group = mcp_mrp_data.get("MRPGroup", "")
+        planning_time_fence = str(mcp_mrp_data.get("PlanningTimeFenceInDays", ""))
+        safety_duration = str(mcp_mrp_data.get("MRPSafetyDuration", ""))
+        lot_sizing = mcp_mrp_data.get("MaterialLozSizeProcedure", "")
+        mrp_segment_type = mcp_mrp_data.get("MRPPlanningSegmentType", "")
+
+        # PPSKZ not available via OData — stays as MISSING DATA
+        advanced_planning_flag = None
         advanced_planning_source = "NOT_AVAILABLE"
-        mrp_type_from_plant = ""
-        planning_time_fence = ""
-        safety_duration = ""
         planned_delivery_duration = ""
 
-        if not isinstance(pp_result, Exception) and not pp_result.get("error"):
-            pp_items = pp_result.get("results") or pp_result.get("value") or []
-            if pp_items:
-                first = pp_items[0]
-                raw_ap = first.get("AdvancedPlanning")
-                if raw_ap is not None:
-                    # Field present — true = checkbox ON (PP/DS active), false = OFF
-                    advanced_planning_flag = bool(raw_ap) if isinstance(raw_ap, bool) else (str(raw_ap).lower() in ("true", "x", "1"))
-                    advanced_planning_source = "A_ProductPlant"
-                mrp_type_from_plant = first.get("MRPType", "")
-                planning_time_fence = str(first.get("PlanningTimeFence", ""))
-                safety_duration = str(first.get("SafetyDuration", ""))
-                planned_delivery_duration = str(first.get("PlannedDeliveryDurationInDays", ""))
-
-        # Process work scheduling (ProductionSchedulingProfile fallback)
+        # Process work scheduling (ProductionSchedulingProfile / FEVOR)
         production_scheduling_profile = ""
         if not isinstance(ws_result, Exception) and not ws_result.get("error"):
             ws_items = ws_result.get("results") or ws_result.get("value") or []
@@ -163,29 +175,42 @@ async def get_ppds_config_and_mrp_issues(
         warnings = [i for i in mrp_issues if i["criticality"] == "2"]
         infos = [i for i in mrp_issues if i["criticality"] == "3"]
 
-        # Advanced Planning finding — [CONFIRMED] when data available, [MISSING DATA] otherwise
-        if advanced_planning_flag is True:
-            ap_finding = "[CONFIRMED] AdvancedPlanning=true — PP/DS integration active for this material/plant (MARC-MTVFP=X)"
-            ap_note = "Advanced Planning checkbox is ON — this material/plant is integrated with PP/DS."
-        elif advanced_planning_flag is False:
-            ap_finding = "[CONFIRMED] AdvancedPlanning=false — PP/DS integration NOT active (MARC-MTVFP not set)"
-            ap_note = "Advanced Planning checkbox is OFF — planned orders will NOT reach PP/DS/RRP3. Set in MM02 → MRP 2 tab."
+        # MRP type finding — [CONFIRMED] from MCP if available
+        if mrp_type_from_mcp:
+            mrp_type_finding = (
+                f"[CONFIRMED] MRPType={mrp_type_from_mcp!r} ({mrp_type_name}) "
+                f"via PP_MRP_COCKPIT_SRV (DSC). "
+                + ("MRP is ACTIVE — planning enabled." if mrp_type_from_mcp not in ("ND", "") else
+                   "MRP Type ND — NO PLANNING. This is a likely root cause.")
+            )
         else:
-            ap_finding = "[MISSING DATA] AdvancedPlanning field not returned by A_ProductPlant — check MM02/MM03 → MRP 2 tab manually"
-            ap_note = "A_ProductPlant did not return AdvancedPlanning field on this system. Manual check required: MM02 → MRP 2 tab → Advanced Planning checkbox (MARC-MTVFP)."
+            mrp_type_finding = "[MISSING DATA] MRP Type — PP_MRP_COCKPIT_SRV returned no data for this material/plant. Check MM03 → MRP 1 tab."
 
         result_data = {
             "material": material,
             "plant": plant,
-            "advanced_planning": advanced_planning_flag,
-            "advanced_planning_source": advanced_planning_source,
-            "advanced_planning_finding": ap_finding,
-            "advanced_planning_note": ap_note,
-            "mrp_type": mrp_type_from_plant,
+            # MCP-sourced MRP config (PP_MRP_COCKPIT_SRV / DSC)
+            "mrp_type": mrp_type_from_mcp,
+            "mrp_type_name": mrp_type_name,
+            "mrp_controller": mrp_controller,
+            "mrp_group": mrp_group,
             "planning_time_fence": planning_time_fence,
             "safety_duration": safety_duration,
-            "planned_delivery_duration": planned_delivery_duration,
+            "lot_sizing_procedure": lot_sizing,
+            "mrp_segment_type": mrp_segment_type,
+            "mrp_config_source": mcp_mrp_source,
+            "mrp_type_finding": mrp_type_finding,
+            # PP/DS flags (not available via OData)
+            "advanced_planning": advanced_planning_flag,
+            "advanced_planning_source": advanced_planning_source,
+            "advanced_planning_finding": (
+                "[MISSING DATA] PPSKZ (PP/DS Planning Procedure) not exposed in any OData service. "
+                "Manual check: MM02 → MRP 2 tab → Advanced Planning checkbox (PPSKZ field). "
+                "SQL path required for automated read — pending TCP BTP destination to DSC HANA DB."
+            ),
+            # Work scheduling
             "production_scheduling_profile": production_scheduling_profile,
+            # QL8 MRP exceptions
             "mrp_issue_count": len(mrp_issues),
             "mrp_errors": errors,
             "mrp_warnings": warnings,

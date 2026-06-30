@@ -1,11 +1,11 @@
 """
-Parallel evidence collector — queries all 15 systems simultaneously via asyncio.gather.
+Parallel evidence collector — queries all 16 systems simultaneously via asyncio.gather.
 NEVER uses sequential fallback; a failing system returns MISSING_DATA, not an abort.
 
 KG system prioritisation:
   When ctx.kg_relevant_systems is non-empty (populated by KG grounding at M1),
   nodes for those systems are tagged kg_priority=True and floated to the front of
-  the payload.nodes list. All 15 systems are always queried — priority is ordering
+  the payload.nodes list. All 16 systems are always queried — priority is ordering
   + tagging only, never filtering.
 
 BDC integration (system 14):
@@ -16,6 +16,11 @@ BDC integration (system 14):
 IBP Monitor System Tasks (system 15):
   IBP planning job run status — tells the agent whether the IBP heuristic ran,
   when it ran, and whether it failed. Degrades gracefully when IBP not configured.
+
+PPDS Orders + Alerts (system 16):
+  PPDS_RES_SCHEDULE via s4-mcp-server (DSC). Provides live PP/DS order data
+  and scheduling alerts. Authoritative source for "planned order not reaching RRP3".
+  Degrades gracefully when S4_MCP_SERVER_URL is not configured.
 """
 from __future__ import annotations
 import asyncio
@@ -43,6 +48,7 @@ from tools.pipo_messages import get_pipo_message_status
 from tools.cloud_alm import get_cloud_alm_health_events
 from tools.bdc_data import get_bdc_supply_chain_analytics
 from tools.ibp_job_monitor import get_ibp_job_status
+from tools.ppds_orders import get_ppds_orders_and_alerts
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +69,7 @@ _SYSTEM_NAMES = [
     "CLOUD_ALM",
     "SAP_BDC",
     "IBP_JOB_MONITOR",
+    "PPDS_RES_SCHEDULE",
 ]
 
 
@@ -121,6 +128,7 @@ async def collect_evidence(
         get_cloud_alm_health_events(ctx.date_from, ctx.date_to, ctx.plant),
         get_bdc_supply_chain_analytics(ctx.material, ctx.plant, ctx.date_from, ctx.date_to),
         get_ibp_job_status(ctx.date_from, ctx.date_to, ctx.planning_version, ibp=ibp),
+        get_ppds_orders_and_alerts(ctx.material, ctx.plant, ctx.date_from, ctx.date_to),
         return_exceptions=True,
     )
 
@@ -178,7 +186,7 @@ async def collect_evidence(
 
     logger.info(
         "M2.achieved: evidence collected — systems_queried=%d, available=%d, unavailable=%d, "
-        "evidence_nodes=%d, bdc_integrated=True, ibp_job_monitor=True, kg_priority_applied=%s",
+        "evidence_nodes=%d, bdc_integrated=True, ibp_job_monitor=True, ppds_res_schedule=True, kg_priority_applied=%s",
         len(_SYSTEM_NAMES), available, unavailable, len(nodes),
         bool(priority_systems),
     )

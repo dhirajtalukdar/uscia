@@ -23,6 +23,8 @@ applications:
       DESTINATION_NAME: S4HANA
       # DSC system — S/4HANA with HANA Cloud connected; used for A_ProductPlant AdvancedPlanning query
       S4HANA_DSC_DESTINATION_NAME: S4HANA_DSC
+      # s4-mcp-server (cc3-708) — wraps DSC OData via MCP for PP_MRP_COCKPIT_SRV + PPDS_RES_SCHEDULE
+      S4_MCP_SERVER_URL: https://cc3-708.cfapps.us10.hana.ondemand.com/mcp
       # AI Core destination
       AICORE_DESTINATION_NAME: aicore
       # IBP destination (SaaS — configure in BTP cockpit as OAuth2ClientCredentials)
