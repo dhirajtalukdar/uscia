@@ -15,6 +15,7 @@ Criticality values: 1 = Error, 2 = Warning, 3 = Information/Success
 """
 from __future__ import annotations
 import logging
+import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -25,6 +26,17 @@ logger = logging.getLogger(__name__)
 _PPH_MRP_ROOT = "/sap/opu/odata/sap/PPH_MRP_MASTER_DATA_ISSUE_SRV"
 _PRODUCT_SRV_ROOT = "/sap/opu/odata/sap/API_PRODUCT_SRV"
 _MISSING = "S4HANA_PPDS_CONFIG"
+
+# DSC destination name — separate S/4HANA system with HANA Cloud connected.
+# A_ProductPlant on DSC exposes AdvancedPlanning (MARC-MTVFP) which is not
+# available on QL8. Falls back to the primary s4 client if DSC not configured.
+_DSC_DESTINATION_NAME = os.environ.get("S4HANA_DSC_DESTINATION_NAME", "S4HANA_DSC")
+
+
+def _get_dsc_client() -> "S4Client":
+    """Return an S4Client pointed at the DSC destination."""
+    from s4hana_client import S4Client
+    return S4Client(destination_name=_DSC_DESTINATION_NAME)
 
 _CRITICALITY_LABEL = {
     "1": "ERROR",
@@ -41,16 +53,20 @@ async def get_ppds_config_and_mrp_issues(
     """
     Retrieve MRP planning issues and PP/DS configuration status.
 
-    Two checks in parallel:
-    1. PPH_MRP_MASTER_DATA_ISSUE_SRV: MRP exceptions/issues from last planning run
-    2. API_PRODUCT_SRV / A_ProductWorkScheduling: ProductionSchedulingProfile (MARC-FEVOR)
-       Note: MARC-MTVFP (Advanced Planning for PP/DS) is NOT in public OData.
+    Three checks in parallel:
+    1. PPH_MRP_MASTER_DATA_ISSUE_SRV (primary s4/QL8): MRP exceptions from last planning run
+    2. API_PRODUCT_SRV/A_ProductPlant (DSC via S4HANA_DSC): AdvancedPlanning (MARC-MTVFP),
+       MRPType, PlanningTimeFence — DSC exposes AdvancedPlanning; QL8 does not
+    3. API_PRODUCT_SRV/A_ProductWorkScheduling (DSC): ProductionSchedulingProfile (MARC-FEVOR)
     """
     import asyncio
 
     if s4 is None:
         from s4hana_client import S4Client
         s4 = S4Client()
+
+    # DSC client — separate destination for A_ProductPlant AdvancedPlanning query
+    dsc = _get_dsc_client()
 
     try:
         # Run all three queries in parallel
@@ -67,9 +83,9 @@ async def get_ppds_config_and_mrp_issues(
                 "$format": "json",
             },
         )
-        # A_ProductPlant exposes AdvancedPlanning (MARC-MTVFP) on S/4HANA 2021+.
-        # This is the authoritative OData field — no manual check needed when it returns data.
-        product_plant_task = s4.get(
+        # A_ProductPlant via DSC — exposes AdvancedPlanning (MARC-MTVFP) on S/4HANA 2021+.
+        # Uses separate dsc client (S4HANA_DSC destination) not the primary QL8 s4 client.
+        product_plant_task = dsc.get(
             f"{_PRODUCT_SRV_ROOT}/A_ProductPlant",
             params={
                 "$filter": f"Product eq '{material}' and Plant eq '{plant}'",
@@ -82,7 +98,7 @@ async def get_ppds_config_and_mrp_issues(
                 "$format": "json",
             },
         )
-        work_sched_task = s4.get(
+        work_sched_task = dsc.get(
             f"{_PRODUCT_SRV_ROOT}/A_ProductWorkScheduling",
             params={
                 "$filter": f"Product eq '{material}' and Plant eq '{plant}'",

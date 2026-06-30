@@ -21,6 +21,8 @@ applications:
       # S/4HANA destination (Private Cloud, OnPremise proxy via Cloud Connector)
       S4HANA_DESTINATION_NAME: S4HANA
       DESTINATION_NAME: S4HANA
+      # DSC system — S/4HANA with HANA Cloud connected; used for A_ProductPlant AdvancedPlanning query
+      S4HANA_DSC_DESTINATION_NAME: S4HANA_DSC
       # AI Core destination
       AICORE_DESTINATION_NAME: aicore
       # IBP destination (SaaS — configure in BTP cockpit as OAuth2ClientCredentials)
