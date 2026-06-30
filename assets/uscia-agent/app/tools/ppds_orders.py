@@ -1,13 +1,82 @@
 """
-PP/DS Order Evidence tool — queries PPDS_RES_SCHEDULE via s4-mcp-server (DSC).
+PP/DS Order Evidence tool — PPDS_RES_SCHEDULE via s4-mcp-server (DSC).
 
-PPDS_RES_SCHEDULE is the OData service backing the PP/DS Planning Board (RRP3 equivalent).
-It provides live PP/DS order data: which orders are scheduled, their status, operations,
-alerts, and component availability.
+J4C verification (2026-07-01) — RETIRED for stateless programmatic use:
 
-Key entities used:
-  - OrderSet: PP/DS orders for a product/location — answers "does this material have PP/DS orders?"
-  - AlertsSet: PP/DS scheduling alerts for a resource/product — capacity or constraint violations
+  QL8 probe: HTTP 500 "System alias 'UXRCLNT200_T' does not exist"
+    → PPDS_RES_SCHEDULE is registered against a different system alias on QL8.
+      Not available on the S4HANA destination.
+
+  DSC probe: HTTP 400 "Simulation does not exist. Please reload the app, then try again."
+    → J4C confirmed: PPDS_RES_SCHEDULE is a UI-backing service for the PP/DS
+      planning board Fiori app. It requires an active Fiori/LiveCache simulation
+      session context. Stateless MCP tool calls cannot provide this.
+      The error "Simulation does not exist" is the service requiring a session
+      that a stateless HTTP call cannot establish.
+
+  J4C recommendation:
+    → RETIRE PPDS_RES_SCHEDULE for programmatic forensic use
+    → Replace with API_PLANNED_ORDERS/A_PlannedOrder for material-level PP/DS
+      order data (now covered by S4HANA_PPDS_STOCK after its correction)
+
+This tool now returns MISSING_DATA with correct guidance.
+System 16 (PPDS_RES_SCHEDULE) is kept in the evidence collector to
+surface the structural gap explicitly in the forensic report.
+"""
+from __future__ import annotations
+import logging
+
+logger = logging.getLogger(__name__)
+
+_MISSING = "PPDS_RES_SCHEDULE"
+
+
+async def get_ppds_orders_and_alerts(
+    material: str,
+    plant: str,
+    date_from: str,
+    date_to: str,
+) -> dict:
+    """
+    PPDS_RES_SCHEDULE retired — requires Fiori session context (J4C verified 2026-07-01).
+
+    QL8: HTTP 500 - system alias not found.
+    DSC: HTTP 400 - "Simulation does not exist" — LiveCache session required.
+
+    PP/DS material-level order data now covered by S4HANA_PPDS_STOCK (system 4)
+    which queries API_PLANNED_ORDERS/A_PlannedOrder after J4C correction.
+
+    A custom SEGW service (ZIBP_PPDS_SRV on /SAPAPO/PORDER) is the correct
+    path for stateless PP/DS order forensics — requires ABAPer + embedded PP/DS
+    activation confirmation (J4C Phase 1, Step 1.5).
+    """
+    logger.info(
+        "PPDS_RES_SCHEDULE: RETIRED — requires Fiori session. material=%s plant=%s",
+        material, plant,
+    )
+    return {
+        "status": "MISSING_DATA",
+        "system": _MISSING,
+        "reason": (
+            "PPDS_RES_SCHEDULE requires an active Fiori/LiveCache simulation session — "
+            "stateless programmatic access returns HTTP 400 'Simulation does not exist'. "
+            "Verified on DSC (2026-07-01). This is a UI-backing service, not an API service. "
+            "PP/DS material-level order data is available via S4HANA_PPDS_STOCK "
+            "(API_PLANNED_ORDERS/A_PlannedOrder) from system 4."
+        ),
+        "what_was_expected": (
+            f"PP/DS scheduled orders and alerts for material {material} / plant {plant}. "
+            "For full PP/DS scheduling forensics a custom SEGW service on /SAPAPO/PORDER "
+            "is required (J4C ZIBP_PPDS_SRV). "
+            "This requires: embedded PP/DS activation confirmed + ABAPer to build service."
+        ),
+        "manual_investigation": (
+            f"Run /SAPAPO/RRP3 for material {material}, plant {plant} in S/4HANA. "
+            "If empty: PP/DS has no orders — check CIF integration model (CURTO_SIMU). "
+            "If orders present: check transfer status back to S/4HANA (SM58 / bgRFC)."
+        ),
+    }
+
   - ComponentAvailability: component shortage / lateness data
 
 This tool is the authoritative OData source for incident type:

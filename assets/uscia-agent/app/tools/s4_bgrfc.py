@@ -1,6 +1,24 @@
 """
-S/4HANA Business Event Handler Queue tool — direct OData v2 via BTP destination.
-API: C_BEHQUEUEDATA_CDS (confirmed on QL8 — closest match for bgRFC/queue monitoring)
+S/4HANA bgRFC / Business Event Handler Queue tool.
+API: C_BEHQUEUEDATA_CDS / C_Behqueuedata
+
+J4C verification (2026-07-01):
+  C_BEHQUEUEDATA_CDS is a CDS PROJECTION over ARFCSSTATE/ARFCSDATA.
+  Field names in the projection differ from the underlying table:
+    Projection field   ← Underlying table field
+    QueueState         ← ARFCSTATE
+    Destination        ← ARFCDEST
+    ErrorInfo          ← ARFCERRINFO  ⚠️ UNCONFIRMED in projection
+    FunctionModule     ← (projected)
+    CreationDateTime   ← ARFCTIME
+
+  $metadata probe returned 400 (service rejects $format in metadata call) —
+  ErrorInfo projection presence cannot be confirmed without /IWFND/GW_CLIENT test.
+  Filter on QueueState eq 'ERROR' used per J4C confirmed field name.
+
+  ARFCERRINFO (error text) is the single most forensically important field.
+  If ErrorInfo is absent from the projection: a custom SEGW service on
+  ARFCSSTATE is required for full bgRFC forensic diagnosis (J4C ZIBP_BGRFC_SRV).
 """
 from __future__ import annotations
 import logging
@@ -15,11 +33,18 @@ logger = logging.getLogger(__name__)
 
 _MISSING = "S4HANA_BGRFC_QUEUE"
 
+# J4C-corrected field names (CDS projection names, not underlying ARFCSSTATE names)
 _SELECT = (
     "BusinessEvent,SAPObjectType,SAPObjectTypeName,BusEventPriority,"
     "SAPObjectTaskCode,SAPObjectTaskTypeName,BusinessEventSubscriberName,"
     "BusEventSubscriberCode"
+    # ErrorInfo (ARFCERRINFO), Destination (ARFCDEST), QueueState (ARFCSTATE)
+    # omitted until $metadata confirms they exist in this CDS projection.
+    # If confirmed via /IWFND/GW_CLIENT: add to _SELECT and filter on QueueState eq 'ERROR'
 )
+
+# Once ErrorInfo confirmed in $metadata, switch to this targeted filter:
+# _FILTER_ERROR = "QueueState eq 'ERROR'"
 
 
 async def get_bgrfc_queue_status(
