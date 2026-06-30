@@ -1,0 +1,19 @@
+---
+applications:
+  - name: cc3-708
+    memory: 256MB
+    disk_quota: 1G
+    instances: 1
+    buildpacks:
+      - python_buildpack
+    stack: cflinuxfs4
+    health-check-type: process
+    command: python src/server.py
+    health-check-timeout: 180
+    services:
+      - proj-vector-connectivity-service
+      - proj-vector-destination-service
+    env:
+      PYTHONUNBUFFERED: true
+      S4_DEBUG: 'true'
+      S4_ODATA_DESTINATION: S4HANA_DSC
