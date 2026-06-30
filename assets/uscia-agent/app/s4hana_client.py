@@ -157,6 +157,8 @@ class _DestinationResolver:
             )
         body = r.json()
         cfg = body.get("destinationConfiguration") or {}
+        if os.environ.get("S4HANA_DSC_DEBUG"):
+            logger.info("DEST_DEBUG [%s]: %s", name, {k: v for k, v in cfg.items() if k.lower() not in ("password",)})
         d_url = (cfg.get("URL") or "").rstrip("/")
         if not d_url:
             raise RuntimeError(f"Destination '{name}' has no URL configured.")
