@@ -1,0 +1,7 @@
+# Cloud Foundry Requirements
+fastmcp
+pyodata
+requests
+lxml
+hdbcli
+python-dotenv>=1.1.0

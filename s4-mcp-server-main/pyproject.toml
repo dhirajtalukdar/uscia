@@ -1,0 +1,13 @@
+[project]
+name = "s4-mcp-server"
+version = "0.1.0"
+description = "MCP Server for SAP S/4HANA OData and SQL access"
+requires-python = ">=3.13"
+dependencies = [
+    "fastmcp",
+    "python-dotenv>=1.1.0",
+    "pyodata",
+    "requests",
+    "lxml",
+    "hdbcli",
+]

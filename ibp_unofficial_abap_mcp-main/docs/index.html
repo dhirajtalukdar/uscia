@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="SAP IBP ABAP Intelligence — MCP server and VS Code extension for AI-powered ABAP development on SAP IBP.">
+<title>SAP IBP ABAP Intelligence</title>
+<style>
+:root {
+  --sap-blue: #0070F2;
+  --sap-blue-dark: #0054BA;
+  --sap-blue-light: #E8F3FF;
+  --sap-blue-faint: #F0F7FF;
+  --white: #FFFFFF;
+  --gray-50: #F8FAFC;
+  --gray-100: #F1F5F9;
+  --gray-200: #E2E8F0;
+  --gray-300: #CBD5E1;
+  --gray-400: #94A3B8;
+  --gray-500: #64748B;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1E293B;
+  --gray-900: #0F172A;
+  --text: #1E293B;
+  --text-dim: #475569;
+  --text-faint: #94A3B8;
+  --glass: rgba(255,255,255,0.72);
+  --glass-border: rgba(255,255,255,0.9);
+  --glass-shadow: 0 4px 24px rgba(0,112,242,0.08), 0 1px 4px rgba(0,0,0,0.04);
+  --glass-shadow-hover: 0 8px 32px rgba(0,112,242,0.14), 0 2px 8px rgba(0,0,0,0.06);
+  --radius: 14px;
+  --radius-sm: 8px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  line-height: 1.6;
+  background: var(--gray-50);
+  background-image:
+    radial-gradient(ellipse 70% 50% at 50% -10%, rgba(0,112,242,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 85% 20%, rgba(0,112,242,0.04) 0%, transparent 50%);
+  min-height: 100vh;
+}
+
+a { color: var(--sap-blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Glass panel ── */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--glass-shadow);
+}
+.glass-card {
+  background: var(--glass);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255,255,255,0.85);
+  border-radius: var(--radius);
+  box-shadow: var(--glass-shadow);
+  transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+}
+.glass-card:hover {
+  box-shadow: var(--glass-shadow-hover);
+  transform: translateY(-2px);
+  border-color: rgba(0,112,242,0.2);
+}
+
+/* ── Unofficial badge (subtle) ── */
+.unofficial-bar {
+  background: rgba(100,116,139,0.06);
+  border-bottom: 1px solid var(--gray-200);
+  padding: 0.35rem 2rem;
+  text-align: center;
+  font-size: 0.73rem;
+  color: var(--text-faint);
+  letter-spacing: 0.01em;
+}
+.unofficial-bar a { color: var(--text-faint); font-weight: 500; }
+
+/* ── Navigation ── */
+nav {
+  position: sticky;
+  top: 0;
+  background: rgba(255,255,255,0.82);
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  border-bottom: 1px solid var(--gray-200);
+  padding: 0 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  z-index: 100;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  text-decoration: none;
+}
+.nav-logo .sap-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sap-blue);
+  flex-shrink: 0;
+}
+.nav-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray-400);
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+}
+.nav-links { display: flex; align-items: center; gap: 1.75rem; }
+.nav-links a {
+  font-size: 0.83rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+.nav-links a:hover { color: var(--sap-blue); }
+.nav-links a.active { color: var(--sap-blue); }
+
+/* ── Hero ── */
+.hero {
+  text-align: center;
+  padding: 5.5rem 2rem 4rem;
+  max-width: 900px;
+  margin: 0 auto;
+}
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sap-blue);
+  background: var(--sap-blue-light);
+  border: 1px solid rgba(0,112,242,0.2);
+  border-radius: 20px;
+  padding: 0.3rem 0.9rem;
+  margin-bottom: 1.5rem;
+}
+.hero-eyebrow .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--sap-blue);
+}
+.hero h1 {
+  font-size: 3.2rem;
+  font-weight: 800;
+  color: var(--gray-900);
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  margin-bottom: 1.25rem;
+}
+.hero h1 .accent {
+  background: linear-gradient(135deg, var(--sap-blue) 0%, #0054BA 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero p {
+  font-size: 1.1rem;
+  color: var(--text-dim);
+  max-width: 640px;
+  margin: 0 auto 2.5rem;
+  line-height: 1.75;
+}
+.hero-actions { display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2rem; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.18s;
+  letter-spacing: -0.01em;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-primary {
+  background: var(--sap-blue);
+  color: white;
+  box-shadow: 0 2px 8px rgba(0,112,242,0.25);
+}
+.btn-primary:hover {
+  background: var(--sap-blue-dark);
+  box-shadow: 0 4px 16px rgba(0,112,242,0.35);
+  transform: translateY(-1px);
+  text-decoration: none;
+  color: white;
+}
+.btn-secondary {
+  background: white;
+  color: var(--text);
+  border: 1px solid var(--gray-200);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.btn-secondary:hover {
+  background: var(--gray-50);
+  border-color: var(--gray-300);
+  transform: translateY(-1px);
+  text-decoration: none;
+  color: var(--text);
+}
+
+/* ── Stats bar ── */
+.stats-bar {
+  display: flex;
+  justify-content: center;
+  gap: 2.5rem;
+  flex-wrap: wrap;
+  padding: 1.5rem 2rem;
+  margin: 0 auto 3rem;
+  max-width: 700px;
+}
+.stat {
+  text-align: center;
+}
+.stat-number {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: var(--sap-blue);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+}
+
+/* ── Tabs ── */
+.tabs-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 0 2rem;
+  margin-bottom: 0;
+  position: sticky;
+  top: 52px;
+  z-index: 90;
+  background: rgba(248,250,252,0.9);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--gray-200);
+}
+.tabs {
+  display: flex;
+  gap: 0;
+  max-width: 400px;
+  width: 100%;
+  padding: 0.6rem 0;
+  gap: 0.25rem;
+}
+.tab-btn {
+  flex: 1;
+  padding: 0.55rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.18s;
+  letter-spacing: -0.01em;
+}
+.tab-btn:hover { color: var(--sap-blue); background: var(--sap-blue-light); }
+.tab-btn.active {
+  color: var(--sap-blue);
+  background: var(--sap-blue-light);
+  border: 1px solid rgba(0,112,242,0.2);
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── Sections ── */
+.section {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 4rem 2rem;
+}
+.section + .section { border-top: 1px solid var(--gray-100); }
+.section-header { margin-bottom: 2.5rem; }
+.section-header h2 {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  letter-spacing: -0.03em;
+  margin-bottom: 0.4rem;
+}
+.section-header p {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+
+/* ── Feature grid ── */
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 1rem;
+}
+
+.feature-card {
+  padding: 1.5rem;
+}
+.feature-card .fc-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--sap-blue-light);
+  border: 1px solid rgba(0,112,242,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.9rem;
+  flex-shrink: 0;
+}
+.feature-card h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 0.45rem;
+  letter-spacing: -0.02em;
+}
+.feature-card p {
+  color: var(--text-dim);
+  font-size: 0.84rem;
+  line-height: 1.65;
+}
+.feature-card .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.85rem;
+}
+.tag {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.72rem;
+  color: var(--sap-blue);
+  background: var(--sap-blue-faint);
+  border: 1px solid rgba(0,112,242,0.15);
+  border-radius: 5px;
+  padding: 0.1rem 0.45rem;
+}
+.tag-gray {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  border-radius: 5px;
+  padding: 0.1rem 0.45rem;
+  font-weight: 600;
+}
+
+/* ── New capability badge ── */
+.badge-new {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: white;
+  background: var(--sap-blue);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  vertical-align: middle;
+  margin-left: 0.4rem;
+}
+
+/* ── Tables ── */
+.table-wrap {
+  overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--gray-200);
+  background: white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+thead tr {
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+}
+th {
+  text-align: left;
+  padding: 0.7rem 1.1rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+td {
+  padding: 0.65rem 1.1rem;
+  border-bottom: 1px solid var(--gray-100);
+  color: var(--text-dim);
+  vertical-align: top;
+}
+td:first-child {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.79rem;
+  color: var(--gray-800);
+  font-weight: 500;
+  white-space: nowrap;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--gray-50); }
+.cat-pill {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-faint);
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  white-space: nowrap;
+}
+.cat-ai {
+  color: var(--sap-blue);
+  background: var(--sap-blue-faint);
+  border-color: rgba(0,112,242,0.2);
+}
+.prompt-hint {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.77rem;
+  color: var(--gray-400);
+  font-style: italic;
+}
+
+/* ── Code ── */
+pre {
+  background: var(--gray-900);
+  color: #E2E8F0;
+  border-radius: var(--radius-sm);
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  margin: 0.75rem 0;
+}
+code {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.85em;
+}
+p code, li code, td code {
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  color: var(--gray-800);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.83em;
+}
+.pre-wrap { position: relative; }
+.copy-btn {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  font-size: 0.7rem;
+  font-family: inherit;
+  color: var(--gray-400);
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 5px;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.pre-wrap:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { background: rgba(255,255,255,0.2); color: white; }
+.copy-btn.copied { color: #86efac; }
+
+/* ── Install cards ── */
+.install-card {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--gray-200);
+  background: white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+}
+.install-card-header {
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--gray-100);
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--gray-800);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--gray-50);
+}
+.install-card-body {
+  padding: 1.25rem;
+}
+.install-card ol { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.65rem; }
+.install-card li { color: var(--text-dim); font-size: 0.88rem; }
+.install-card li strong { color: var(--text); }
+
+/* ── Keyboard shortcut ── */
+kbd {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.74rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--gray-600);
+  background: white;
+  border: 1px solid var(--gray-300);
+  border-radius: 5px;
+  box-shadow: 0 2px 0 var(--gray-200);
+}
+
+/* ── Quickstart steps ── */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+.step {
+  padding: 1.5rem;
+  text-align: center;
+}
+.step-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sap-blue);
+  color: white;
+  font-weight: 800;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.9rem;
+  box-shadow: 0 2px 8px rgba(0,112,242,0.3);
+}
+.step h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin-bottom: 0.35rem;
+}
+.step p { font-size: 0.82rem; color: var(--text-dim); line-height: 1.55; }
+
+/* ── FAQ ── */
+.faq { display: flex; flex-direction: column; gap: 0.5rem; }
+.faq-item {
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.faq-item:hover { border-color: var(--gray-300); }
+.faq-q {
+  width: 100%;
+  text-align: left;
+  padding: 1rem 1.25rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--gray-800);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+.faq-q:hover { background: var(--gray-50); }
+.faq-chevron { color: var(--gray-400); font-size: 0.7rem; flex-shrink: 0; transition: transform 0.2s; }
+.faq-item.open .faq-chevron { transform: rotate(180deg); }
+.faq-a {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.2s;
+  padding: 0 1.25rem;
+  font-size: 0.84rem;
+  color: var(--text-dim);
+  line-height: 1.7;
+}
+.faq-item.open .faq-a { max-height: 400px; padding: 0 1.25rem 1rem; }
+
+/* ── Search ── */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 1rem;
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+.search-bar input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: var(--text);
+}
+.search-bar input::placeholder { color: var(--text-faint); }
+.search-icon { color: var(--gray-400); }
+
+/* ── Screenshot ── */
+.screenshot-wrap {
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--gray-200);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  margin-top: 2rem;
+  cursor: zoom-in;
+}
+.screenshot-wrap img { width: 100%; display: block; }
+
+/* ── Review pipeline ── */
+.pipeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  margin: 1.5rem 0;
+}
+.pipeline-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1rem 1.25rem;
+  background: white;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  min-width: 120px;
+  flex: 1;
+}
+.pipeline-step .ps-icon { display:flex; align-items:center; justify-content:center; margin-bottom: 0.4rem; }
+.pipeline-step .ps-label { font-size: 0.78rem; font-weight: 700; color: var(--gray-800); line-height: 1.3; }
+.pipeline-step .ps-sub { font-size: 0.7rem; color: var(--text-faint); margin-top: 0.15rem; }
+.pipeline-arrow {
+  color: var(--sap-blue);
+  font-size: 1rem;
+  padding: 0 0.35rem;
+  flex-shrink: 0;
+}
+.pipeline-step.active { border-color: rgba(0,112,242,0.3); background: var(--sap-blue-faint); }
+.pipeline-step.active .ps-label { color: var(--sap-blue); }
+
+/* ── Arch diagram ── */
+.arch-box {
+  background: var(--gray-900);
+  color: #94A3B8;
+  border-radius: var(--radius-sm);
+  padding: 1.25rem 1.5rem;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre;
+  overflow-x: auto;
+  margin-top: 1.5rem;
+}
+
+/* ── Footer ── */
+footer {
+  text-align: center;
+  padding: 2.5rem 2rem;
+  border-top: 1px solid var(--gray-200);
+  color: var(--text-faint);
+  font-size: 0.78rem;
+  background: white;
+}
+footer a { color: var(--text-faint); }
+footer a:hover { color: var(--sap-blue); }
+
+/* ── Lightbox ── */
+.lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15,23,42,0.85);
+  backdrop-filter: blur(8px);
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  padding: 2rem;
+}
+.lightbox.open { display: flex; }
+.lightbox img { max-width: 90vw; max-height: 88vh; border-radius: var(--radius); box-shadow: 0 24px 80px rgba(0,0,0,0.5); }
+.lightbox-close {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.5rem;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.lightbox-close:hover { background: rgba(255,255,255,0.22); }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .hero h1 { font-size: 2.2rem; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: 1fr; }
+  .pipeline { flex-wrap: wrap; gap: 0.5rem; }
+  .pipeline-arrow { display: none; }
+  nav .nav-links { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- Subtle unofficial notice -->
+<div class="unofficial-bar">
+  Unofficial &mdash; SAP Internal Use Only &middot; For investigation and non-productive code only &middot; Not an official SAP product &middot;
+  <a href="https://github.tools.sap/I520242/ibp_unofficial_abap_mcp/issues">Report an issue</a>
+</div>
+
+<!-- Navigation -->
+<nav>
+  <a class="nav-logo" href="#">
+    <span class="sap-dot"></span>
+    IBP ABAP Intelligence
+    <span class="nav-badge">Unofficial</span>
+  </a>
+  <div class="nav-links">
+    <a href="#" onclick="switchTab('server'); return false;" id="nav-server">MCP Server</a>
+    <a href="#" onclick="switchTab('extension'); return false;" id="nav-extension">VS Code Extension</a>
+    <a href="#faq">FAQ</a>
+    <a href="https://github.tools.sap/I520242/ibp_unofficial_abap_mcp/issues">Issues</a>
+  </div>
+</nav>
+
+<!-- Hero -->
+<div class="hero">
+  <h1>Your AI colleague who helps you write <span class="accent">production-ready code</span></h1>
+  <p>An MCP server and VS Code extension that give Claude Code, Cline, and GitHub Copilot deep access to SAP IBP ABAP source code — with AI-powered code review, test generation, transport analysis, and a unified rules engine built on IBP Conventions and CleanABAP.</p>
+  <div class="hero-actions">
+    <a href="https://github.tools.sap/I520242/ibp-bud6-mcp" class="btn btn-primary">Clone MCP Server</a>
+    <a href="#" class="btn btn-secondary" onclick="switchTab('server'); document.getElementById('install').scrollIntoView({behavior:'smooth'}); return false;">View setup guide</a>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="stat"><div class="stat-number">35+</div><div class="stat-label">MCP Tools</div></div>
+  <div class="stat"><div class="stat-number">6</div><div class="stat-label">Review Agents</div></div>
+  <div class="stat"><div class="stat-number">2 795</div><div class="stat-label">Rules Auto-Loaded</div></div>
+  <div class="stat"><div class="stat-number">65+</div><div class="stat-label">VS Code Commands</div></div>
+</div>
+
+<!-- Tabs -->
+<div class="tabs-wrap">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('server')" id="tab-server">⚙ MCP Server</button>
+    <button class="tab-btn" onclick="switchTab('extension')" id="tab-extension">□ VS Code Extension</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  TAB 1 — MCP SERVER                                       -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="tab-content active" id="content-server">
+
+<!-- Getting started -->
+<div class="section" id="quickstart">
+  <div class="section-header">
+    <h2>Getting started</h2>
+    <p>Up and running in under two minutes.</p>
+  </div>
+  <div class="steps">
+    <div class="step glass-card">
+      <div class="step-num">1</div>
+      <h3>Clone</h3>
+      <p>Clone the MCP server repository from <a href="https://github.tools.sap/I520242/ibp-bud6-mcp">GitHub</a> to your machine.</p>
+    </div>
+    <div class="step glass-card">
+      <div class="step-num">2</div>
+      <h3>Install &amp; configure</h3>
+      <p>Install the Python package, copy <code>.env.example</code> to <code>.env</code>, and fill in your SAP credentials.</p>
+    </div>
+    <div class="step glass-card">
+      <div class="step-num">3</div>
+      <h3>Register &amp; start</h3>
+      <p>Register with Claude Code and start the server. Ask anything about IBP ABAP.</p>
+    </div>
+  </div>
+</div>
+
+<!-- What it does -->
+<div class="section" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>What it does</h2>
+    <p>Every tool an ABAP developer needs, available to any MCP-capable AI assistant.</p>
+  </div>
+  <div class="grid-3">
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+      <h3>Search &amp; Lookup</h3>
+      <p>Regex search across cached ABAP, test classes, CDS views, tables, and IBP domain documentation. Fetch and explain any ADT-discoverable object on demand.</p>
+      <div class="tags">
+        <span class="tag">search_code</span>
+        <span class="tag">search_ibp_docs</span>
+        <span class="tag">lookup_object</span>
+        <span class="tag">explain_object</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="10" width="7" height="11" rx="1"/><line x1="3" y1="3" x2="3" y2="21"/></svg></div>
+      <h3>Code Analysis</h3>
+      <p>Navigate class hierarchies, trace method call graphs, follow CDS view data-source chains, and find all references — all visualized in the VS Code extension.</p>
+      <div class="tags">
+        <span class="tag">class_hierarchy</span>
+        <span class="tag">method_callers</span>
+        <span class="tag">cds_dependencies</span>
+        <span class="tag">where_used</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg></div>
+      <h3>Version History</h3>
+      <p>Browse transport-based change logs, fetch historical source at any version, and diff between two versions of any class or its test include.</p>
+      <div class="tags">
+        <span class="tag">list_class_versions</span>
+        <span class="tag">get_class_version_source</span>
+        <span class="tag">diff_class_versions</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="3" y="8" width="18" height="13" rx="2"/><line x1="8" y1="8" x2="8" y2="5"/><line x1="16" y1="8" x2="16" y2="5"/><line x1="8" y1="5" x2="16" y2="5"/><circle cx="9" cy="14" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1.5" fill="currentColor" stroke="none"/><line x1="9" y1="18" x2="15" y2="18"/></svg></div>
+      <h3>Multi-Agent Code Review <span class="badge-new">Updated</span></h3>
+      <p>6 focused specialist agents run sequentially — Naming, Clean Code, Performance, Exceptions &amp; Logging, Testability, and Semantic Understanding. Each receives prior agents' summaries to avoid duplication. The full class source (up to 200 KB) is passed to every agent so method bodies are always visible.</p>
+      <div class="tags">
+        <span class="tag">ai_review_code</span>
+        <span class="tag">ai_review_agent</span>
+        <span class="tag cat-ai">LLM</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+      <h3>Transport Review <span class="badge-new">New</span></h3>
+      <p>Streaming multi-agent transport review: a Transport Analyst reads all diffs first, then 6 specialist agents review each object. The full class implementation is always fetched — the LLM never sees definition-only source.</p>
+      <div class="tags">
+        <span class="tag">ai_review_transport_prepare</span>
+        <span class="tag">ai_review_transport_agent</span>
+        <span class="tag cat-ai">LLM</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+      <h3>Unified Rules Engine <span class="badge-new">New</span></h3>
+      <p>2 795 searchable, tagged rules from IBP Conventions, CleanABAP, and IBP domain docs. <code>get_rules(query, purpose)</code> returns the rules most relevant to the current task — before any code is written.</p>
+      <div class="tags">
+        <span class="tag">get_rules</span>
+        <span class="tag">save_custom_rules</span>
+        <span class="tag">get_custom_rules</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+      <h3>Code Generation</h3>
+      <p>Generate unit test boilerplate with OSQL environment, TEST-INJECTION stubs, and one test per method. Generate .docx test documentation. Create class skeletons from interfaces and superclass patterns.</p>
+      <div class="tags">
+        <span class="tag">generate_test</span>
+        <span class="tag">generate_test_documentation</span>
+        <span class="tag">generate_class</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><polyline points="20 6 9 17 4 12"/></svg></div>
+      <h3>Code Quality</h3>
+      <p>Static lint against CleanABAP + IBP conventions. Live SAP compiler syntax check via ADT checkruns. Compare local code against the live SAP system version with a native diff.</p>
+      <div class="tags">
+        <span class="tag">review_abap_code</span>
+        <span class="tag">syntax_check</span>
+        <span class="tag">diff_with_sap</span>
+        <span class="tag">diff_abap_conventions</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+      <h3>Review Score History <span class="badge-new">New</span></h3>
+      <p>Every AI review records a quality score in <code>index.db</code>. <code>get_review_history</code> returns a trend table per object. The VS Code dashboard shows score history alongside version history.</p>
+      <div class="tags">
+        <span class="tag">get_review_history</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+      <h3>Intent-Based Search <span class="badge-new">New</span></h3>
+      <p>Describe what you want in plain English. The LLM generates ABAP-specific search terms, searches the index, and returns grouped results — no regex required.</p>
+      <div class="tags">
+        <span class="tag">search_code_by_intent</span>
+        <span class="tag cat-ai">LLM</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/></svg></div>
+      <h3>Method Semantic Index <span class="badge-new">New</span></h3>
+      <p>AI extracts the business-level summary, domain role (validation / data_access / orchestration / …), complexity, and tags for every method in a class and stores them in <code>index.db</code>. Powers intent search, Semantic Understanding review, and the Object Dashboard method panel.</p>
+      <div class="tags">
+        <span class="tag">ai_extract_method_index</span>
+        <span class="tag">get_method_index_for_class</span>
+        <span class="tag">set_method_semantics</span>
+        <span class="tag">search_method_index</span>
+        <span class="tag cat-ai">LLM</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg></div>
+      <h3>Data Preview &amp; Query <span class="badge-new">New</span></h3>
+      <p>Preview live data from any DDIC table or CDS view directly from the SAP system. Run freestyle Open SQL SELECT statements and see results as a table. Claude can now look inside configuration tables, key figure mappings, and planning area structures without leaving the conversation.</p>
+      <div class="tags">
+        <span class="tag">preview_data</span>
+        <span class="tag">query_data</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+      <h3>Type System &amp; Signatures</h3>
+      <p>Full method signatures with parameter types and direction. Resolve DDIC data elements, structures, and table types. Look up T100 message class texts.</p>
+      <div class="tags">
+        <span class="tag">get_method_signatures</span>
+        <span class="tag">get_interface_contract</span>
+        <span class="tag">lookup_data_dictionary</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg></div>
+      <h3>ADT Live Fetch &amp; Cache</h3>
+      <p>Fetch individually, by package, or with full dependency resolution. Automatic stale detection — classes use a lightweight version-list check. Works fully offline from cache.</p>
+      <div class="tags">
+        <span class="tag">fetch_adt_object</span>
+        <span class="tag">fetch_adt_package</span>
+        <span class="tag">fetch_with_dependencies</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CLARA callout -->
+<div class="section" style="border-top:1px solid var(--gray-100); padding-top:2.5rem; padding-bottom:2.5rem;">
+  <div style="display:flex; align-items:center; gap:2rem; background:linear-gradient(135deg, var(--sap-blue-faint) 0%, rgba(255,255,255,0.6) 100%); border:1px solid rgba(0,112,242,0.18); border-radius:var(--radius); padding:1.75rem 2rem; backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);">
+    <div style="flex-shrink:0; width:48px; height:48px; background:var(--sap-blue); border-radius:12px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,112,242,0.3);"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+    <div style="flex:1; min-width:0;">
+      <div style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--sap-blue); margin-bottom:0.3rem;">Extended Review Capabilities</div>
+      <h3 style="font-size:1rem; font-weight:700; color:var(--gray-900); margin-bottom:0.35rem; letter-spacing:-0.02em;">CLARA — Continuous Live ABAP Review Assistant</h3>
+      <p style="font-size:0.85rem; color:var(--text-dim); line-height:1.6; margin:0;">A standalone web application for deep ABAP code review with transport-level analysis, custom rules, suppression tracking, and PDF/Markdown export. No MCP server or VS Code extension required — runs entirely in your browser.</p>
+    </div>
+    <a href="https://pages.github.tools.sap/I520242/clara/" target="_blank" rel="noopener" style="flex-shrink:0;" class="btn btn-primary">Open CLARA →</a>
+  </div>
+</div>
+
+<!-- Multi-agent review pipeline -->
+<div class="section" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>Multi-agent review pipeline</h2>
+    <p>Every code and transport review runs through six focused specialist agents. The panel opens immediately with pending cards that fill in live as each agent finishes.</p>
+  </div>
+
+  <div class="pipeline">
+    <div class="pipeline-step active">
+      <div class="ps-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
+      <div class="ps-label">Naming &amp; Conventions</div>
+      <div class="ps-sub">IBP prefixes, namespace, snake_case</div>
+    </div>
+    <div class="pipeline-arrow">›</div>
+    <div class="pipeline-step active">
+      <div class="ps-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M3 22V12a9 9 0 0 1 18 0v10"/><line x1="3" y1="22" x2="21" y2="22"/></svg></div>
+      <div class="ps-label">Clean Code</div>
+      <div class="ps-sub">Methods, conditions, tables, constructs</div>
+    </div>
+    <div class="pipeline-arrow">›</div>
+    <div class="pipeline-step active">
+      <div class="ps-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+      <div class="ps-label">Performance</div>
+      <div class="ps-sub">SELECT in LOOP, SELECT *, N+1 queries</div>
+    </div>
+    <div class="pipeline-arrow">›</div>
+    <div class="pipeline-step active">
+      <div class="ps-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+      <div class="ps-label">Exceptions &amp; Logging</div>
+      <div class="ps-sub">TRY/CATCH, /ibp/cx_, block_start/end</div>
+    </div>
+    <div class="pipeline-arrow">›</div>
+    <div class="pipeline-step active">
+      <div class="ps-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M14.5 2v10.5L20 21H4l5.5-8.5V2"/><line x1="8.5" y1="2" x2="15.5" y2="2"/></svg></div>
+      <div class="ps-label">Testability</div>
+      <div class="ps-sub">TEST-SEAM, OSQL env, assertions</div>
+    </div>
+    <div class="pipeline-arrow">›</div>
+    <div class="pipeline-step active">
+      <div class="ps-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div>
+      <div class="ps-label">Semantic Understanding</div>
+      <div class="ps-sub">Role alignment, intent vs implementation</div>
+    </div>
+  </div>
+
+  <p style="font-size:0.83rem; color:var(--text-faint); margin-top:0.75rem; text-align:center;">Transport reviews add a 7th agent (Transport Analyst) that reads all diffs first and feeds a summary to every specialist.</p>
+</div>
+
+<!-- Installation -->
+<div class="section" id="install" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>Installation</h2>
+    <p>Requires Python 3.10+ and <a href="https://github.com/astral-sh/uv">uv</a>. Works on macOS, Linux, and Windows.</p>
+  </div>
+  <div class="grid-2">
+    <div class="install-card">
+      <div class="install-card-header">MCP Server</div>
+      <div class="install-card-body">
+        <ol>
+          <li>Clone the repository:
+            <div class="pre-wrap"><pre>git clone https://github.tools.sap/I520242/ibp-bud6-mcp.git
+cd ibp-bud6-mcp</pre><button class="copy-btn">Copy</button></div>
+          </li>
+          <li>Install dependencies:
+            <div class="pre-wrap"><pre>pip install -e .</pre><button class="copy-btn">Copy</button></div>
+          </li>
+          <li>Copy and fill in your SAP credentials:
+            <div class="pre-wrap"><pre>cp .env.example .env
+# Edit .env with SAP_BASE_URL, SAP_USERNAME, SAP_PASSWORD</pre><button class="copy-btn">Copy</button></div>
+          </li>
+          <li>Build the rules database:
+            <div class="pre-wrap"><pre>python -m sap_ibp_abap_int.rules_ingest</pre><button class="copy-btn">Copy</button></div>
+          </li>
+          <li>Register with Claude Code and start:
+            <div class="pre-wrap"><pre>claude mcp add SAP-IBP-ABAP-INT -s user \
+  -- sap-ibp-abap-int --env-file /path/to/.env</pre><button class="copy-btn">Copy</button></div>
+          </li>
+        </ol>
+      </div>
+    </div>
+    <div class="install-card">
+      <div class="install-card-header">Configuration</div>
+      <div class="install-card-body">
+        <p style="font-size:0.84rem; color:var(--text-dim); margin-bottom:0.75rem;">Minimum <code>.env</code> for live SAP access:</p>
+        <div class="pre-wrap"><pre>SAP_BASE_URL=https://your-system.example.sap
+SAP_USERNAME=your_user
+SAP_PASSWORD=your_password
+SAP_VERIFY_SSL=false</pre><button class="copy-btn">Copy</button></div>
+        <p style="font-size:0.84rem; color:var(--text-dim); margin:0.75rem 0 0.5rem;">Add these for AI-powered tools:</p>
+        <div class="pre-wrap"><pre>LLM_PROXY_URL=http://localhost:6655/litellm/v1/chat/completions
+LLM_API_KEY=your-bearer-token
+LLM_MODEL=anthropic--claude-4.7-opus</pre><button class="copy-btn">Copy</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tool Reference -->
+<div class="section" style="border-top:1px solid var(--gray-100)" id="tools">
+  <div class="section-header">
+    <h2>Tool reference</h2>
+    <p>All MCP tools exposed by the server. LLM-powered tools require <code>LLM_API_KEY</code>.</p>
+  </div>
+
+  <div class="search-bar">
+    <span class="search-icon">🔍</span>
+    <input type="text" placeholder="Filter by name, category, or description…" oninput="filterTools(this.value)" id="tool-filter">
+  </div>
+
+  <div class="table-wrap">
+  <table id="tool-table">
+    <thead><tr><th>Tool</th><th>Category</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>get_rules</td><td><span class="cat-pill cat-ai">Rules</span></td><td>Retrieve relevant rules before any code task. Searches 2 795 tagged rules from IBP Conventions, CleanABAP, and IBP domain docs by purpose (write/review/test) and keyword.<span class="prompt-hint">"Get rules for writing a class with DB access and exception handling"</span></td></tr>
+      <tr><td>save_custom_rules</td><td><span class="cat-pill cat-ai">Rules</span></td><td>Write team-specific rules back to <code>rules.json</code>. Used by the VS Code custom rules editor. Reloads the review pipeline immediately.</td></tr>
+      <tr><td>get_custom_rules</td><td><span class="cat-pill cat-ai">Rules</span></td><td>Show all active team custom rules from <code>rules.json</code>.</td></tr>
+      <tr><td>search_code</td><td><span class="cat-pill">Search</span></td><td>Regex/keyword search across cached ABAP, test classes, CDS views, tables, and CleanABAP guide.<span class="prompt-hint">"Search the IBP codebase for usages of FOR ALL ENTRIES"</span></td></tr>
+      <tr><td>search_ibp_docs</td><td><span class="cat-pill">Search</span></td><td>FTS5 search across ingested IBP domain documentation (config, planning, admin).<span class="prompt-hint">"What does the IBP documentation say about planning area configuration?"</span></td></tr>
+      <tr><td>search_adt_objects</td><td><span class="cat-pill">Search</span></td><td>Wildcard search against the SAP ADT repository. Filter by object type.</td></tr>
+      <tr><td>search_code_by_intent</td><td><span class="cat-pill cat-ai">Search</span></td><td>Natural language search — LLM generates ABAP-specific search terms then searches the index.<span class="prompt-hint">"Find classes that validate planning area attributes"</span></td></tr>
+      <tr><td>lookup_object</td><td><span class="cat-pill">Search</span></td><td>Get source code of any class, interface, CDS view, or table. Six include modes. Auto-chunks objects &gt; 20 KB.<span class="prompt-hint">"Show me the source code of /IBP/CL_DBP_BO"</span></td></tr>
+      <tr><td>explain_object</td><td><span class="cat-pill">Search</span></td><td>Structured explanation: purpose, public API, patterns, dependencies.<span class="prompt-hint">"Explain what /IBP/CL_CODAP_ORCHESTRATOR does"</span></td></tr>
+      <tr><td>class_hierarchy</td><td><span class="cat-pill">Analysis</span></td><td>Superclass chain and all direct subclasses.<span class="prompt-hint">"Show the class hierarchy of /IBP/CL_MOVE2F_JCE_BADI_ABS"</span></td></tr>
+      <tr><td>method_callers</td><td><span class="cat-pill">Analysis</span></td><td>Call graph: who calls this method and what it calls.<span class="prompt-hint">"Who calls GET_CHANGES in /IBP/CL_ORIGINAL_CHANGES_DATA?"</span></td></tr>
+      <tr><td>cds_dependencies</td><td><span class="cat-pill">Analysis</span></td><td>Recursive CDS view data-source chain with configurable depth.</td></tr>
+      <tr><td>where_used</td><td><span class="cat-pill">Analysis</span></td><td>All objects referencing a given class or interface.</td></tr>
+      <tr><td>list_class_versions</td><td><span class="cat-pill">History</span></td><td>Transport-based change log: version ID, date, author, description, transport number.</td></tr>
+      <tr><td>get_class_version_source</td><td><span class="cat-pill">History</span></td><td>Full source code at a specific historical version.</td></tr>
+      <tr><td>diff_class_versions</td><td><span class="cat-pill">History</span></td><td>Unified diff between two historical versions.</td></tr>
+      <tr><td>get_review_history</td><td><span class="cat-pill">History</span></td><td>Review score trend for an object — date, overall score, findings by severity.<span class="prompt-hint">"Show the review history for /IBP/CL_DBP_BO"</span></td></tr>
+      <tr><td>review_abap_code</td><td><span class="cat-pill">Quality</span></td><td>Static lint: IBP prefix violations, method length, nesting, modernization, performance anti-patterns.</td></tr>
+      <tr><td>syntax_check</td><td><span class="cat-pill">Quality</span></td><td>Live SAP compiler check via ADT. Creates a temp class, runs checkruns, and deletes it. Real compilation errors.</td></tr>
+      <tr><td>diff_abap_conventions</td><td><span class="cat-pill">Quality</span></td><td>Compare code against indexed IBP codebase patterns and report deviations with correct examples.</td></tr>
+      <tr><td>diff_with_sap</td><td><span class="cat-pill">Quality</span></td><td>Unified diff of local code versus the live SAP system version.</td></tr>
+      <tr><td>ai_review_code</td><td><span class="cat-pill cat-ai">AI Review</span></td><td>Run the full 6-agent review pipeline. Returns per-agent scores and findings. Records score history.<span class="prompt-hint">"Review this ABAP class and give me a score"</span></td></tr>
+      <tr><td>ai_review_agent</td><td><span class="cat-pill cat-ai">AI Review</span></td><td>Run a single agent from the pipeline by index (0–4). Used by the VS Code extension for live streaming progress.</td></tr>
+      <tr><td>ai_review_transport_prepare</td><td><span class="cat-pill cat-ai">AI Review</span></td><td>Fetch transport metadata and diff manifest without calling the LLM. Used to open the panel immediately.</td></tr>
+      <tr><td>ai_review_transport_agent</td><td><span class="cat-pill cat-ai">AI Review</span></td><td>Run one agent (0=analyst, 1–6=specialists) for a transport review. Always fetches full class source — not definition-only.</td></tr>
+      <tr><td>generate_test</td><td><span class="cat-pill">Generation</span></td><td>Template-based unit test skeleton with OSQL env, TEST-INJECTION stubs, one test per public method.<span class="prompt-hint">"Generate unit tests for /IBP/CL_ORIGINAL_CHANGES_DATA"</span></td></tr>
+      <tr><td>generate_test_documentation</td><td><span class="cat-pill">Generation</span></td><td>Generate a .docx test case document (Type A: API/scenario, Type B: integration/component).</td></tr>
+      <tr><td>generate_class</td><td><span class="cat-pill">Generation</span></td><td>Full ABAP class skeleton from interfaces and superclass, with IBP logging, exception handling, and TEST-SEAMs.</td></tr>
+      <tr><td>ai_generate_test</td><td><span class="cat-pill cat-ai">Generation</span></td><td>AI-generated complete unit test class. Auto-detects AMDP and switches to AMDP Test Double Framework.<span class="prompt-hint">"Write a complete unit test class for this production code"</span></td></tr>
+      <tr><td>ai_explain_object</td><td><span class="cat-pill cat-ai">Generation</span></td><td>AI-powered structured explanation: purpose, public API, architecture, design decisions, dependencies.</td></tr>
+      <tr><td>get_method_signatures</td><td><span class="cat-pill">Types</span></td><td>Full parameter signatures: direction, type, optional flag, RAISING clauses.</td></tr>
+      <tr><td>get_interface_contract</td><td><span class="cat-pill">Types</span></td><td>All methods, constants, and type definitions from an interface.</td></tr>
+      <tr><td>lookup_data_dictionary</td><td><span class="cat-pill">Types</span></td><td>Resolve data elements, structures, and table types from ABAP DDIC.</td></tr>
+      <tr><td>lookup_message_class</td><td><span class="cat-pill">Types</span></td><td>Look up T100 message texts with placeholder info.</td></tr>
+      <tr><td>fetch_adt_object</td><td><span class="cat-pill">ADT</span></td><td>Fetch a single object from SAP via ADT REST and index it locally.</td></tr>
+      <tr><td>fetch_adt_package</td><td><span class="cat-pill">ADT</span></td><td>Bulk-fetch all objects in a SAP package at once.</td></tr>
+      <tr><td>fetch_with_dependencies</td><td><span class="cat-pill">ADT</span></td><td>BFS traversal: fetch an object and its interfaces, superclass, type refs, static call targets.</td></tr>
+      <tr><td>list_user_transports</td><td><span class="cat-pill">Transport</span></td><td>CTS transport requests by user: workbench + customizing, tasks, and contained objects.</td></tr>
+      <tr><td>preview_data</td><td><span class="cat-pill">Data</span></td><td>Fetch live rows from a DDIC table or CDS view. Auto-detects type, falls back to freestyle SQL.<span class="prompt-hint">"Show me the contents of /IBP/TS_KFMAP"</span></td></tr>
+      <tr><td>query_data</td><td><span class="cat-pill">Data</span></td><td>Execute a freestyle Open SQL SELECT against the SAP system and return results as a table.<span class="prompt-hint">"SELECT DRIVERID, STATUS FROM /IBP/C_DBP_DRIVER_STATUS WHERE STATUS = 'DELETED' UP TO 20 ROWS"</span></td></tr>
+      <tr><td>ai_extract_method_index</td><td><span class="cat-pill cat-ai">AI</span></td><td>AI extracts business summary, role, complexity, and tags for every method in a class. Call once before feature_finder or search_method_index.<span class="prompt-hint">"Extract semantics for /IBP/CL_CODAP_DPC_EXT"</span></td></tr>
+      <tr><td>get_method_index_for_class</td><td><span class="cat-pill">Semantic</span></td><td>Return all stored method semantics for a class — summaries, roles, complexity, domain tags.</td></tr>
+      <tr><td>search_method_index</td><td><span class="cat-pill">Semantic</span></td><td>FTS5 full-text search over extracted method summaries and tags.<span class="prompt-hint">"Find methods that validate key figures"</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<!-- Configuration -->
+<div class="section" id="config" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>Configuration</h2>
+    <p>Environment variables — read from a <code>.env</code> file or system environment.</p>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Variable</th><th>Required</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>SAP_BASE_URL</td><td>For live fetch</td><td>—</td><td>SAP system URL (ADT endpoint)</td></tr>
+      <tr><td>SAP_USERNAME</td><td>For live fetch</td><td>—</td><td>SAP ADT user</td></tr>
+      <tr><td>SAP_PASSWORD</td><td>For live fetch</td><td>—</td><td>SAP ADT password</td></tr>
+      <tr><td>SAP_VERIFY_SSL</td><td>No</td><td>false</td><td>SSL certificate verification</td></tr>
+      <tr><td>SAP_CLIENT</td><td>No</td><td>—</td><td>SAP client number</td></tr>
+      <tr><td>IBP_DATA_DIR</td><td>No</td><td>(package data/)</td><td>Cache and log directory</td></tr>
+      <tr><td>IBP_CACHE_TTL_HOURS</td><td>No</td><td>24</td><td>Hours before cached objects are considered stale</td></tr>
+      <tr><td>LLM_PROXY_URL</td><td>For AI tools</td><td>—</td><td>OpenAI-compatible chat completions endpoint</td></tr>
+      <tr><td>LLM_API_KEY</td><td>For AI tools</td><td>—</td><td>Bearer token for the LLM proxy</td></tr>
+      <tr><td>LLM_MODEL</td><td>No</td><td>anthropic--claude-4.7-opus</td><td>Model identifier for the LLM proxy</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3 style="margin-top:2rem; font-size:0.95rem; font-weight:700; color:var(--gray-900); margin-bottom:1rem;">Registering with AI clients</h3>
+  <div class="grid-2">
+    <div class="install-card">
+      <div class="install-card-header">Claude Code</div>
+      <div class="install-card-body">
+        <div class="pre-wrap"><pre>claude mcp add SAP-IBP-ABAP-INT -s user \
+  -- sap-ibp-abap-int --env-file /path/to/.env</pre><button class="copy-btn">Copy</button></div>
+      </div>
+    </div>
+    <div class="install-card">
+      <div class="install-card-header">Cline / GitHub Copilot</div>
+      <div class="install-card-body">
+        <div class="pre-wrap"><pre>{
+  "servers": {
+    "SAP-IBP-ABAP-INT": {
+      "command": "sap-ibp-abap-int",
+      "args": ["--env-file", "/path/.env"]
+    }
+  }
+}</pre><button class="copy-btn">Copy</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /content-server -->
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  TAB 2 — VS CODE EXTENSION                                -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="content-extension">
+
+<!-- Overview -->
+<div class="section" id="ext-overview">
+  <div class="section-header">
+    <h2>IBP ABAP Intelligence for VS Code</h2>
+    <p>Every MCP server tool visualized — browse, review, and generate ABAP without leaving the editor. Three sidebar panels, 60+ commands, and 5 editor toolbar buttons on every <code>.abap</code> file.</p>
+  </div>
+  <div class="screenshot-wrap" onclick="openLightbox(this.querySelector('img').src)">
+    <img src="extension-screenshot.png" alt="IBP ABAP Intelligence extension showing sidebar, object dashboard, and method signatures">
+  </div>
+</div>
+
+<!-- AI toolbar -->
+<div class="section" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>Editor toolbar — AI tools</h2>
+    <p>Five buttons on every <code>.abap</code> file. The panel opens immediately and results stream in live.</p>
+  </div>
+  <div class="grid-3">
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="3" y="8" width="18" height="13" rx="2"/><line x1="8" y1="8" x2="8" y2="5"/><line x1="16" y1="8" x2="16" y2="5"/><line x1="8" y1="5" x2="16" y2="5"/><circle cx="9" cy="14" r="1.5" fill="currentColor" stroke="none"/><circle cx="15" cy="14" r="1.5" fill="currentColor" stroke="none"/><line x1="9" y1="18" x2="15" y2="18"/></svg></div>
+      <h3>Code Review <span class="badge-new">Streaming</span></h3>
+      <p>Opens a panel instantly with 6 pending agent cards. Each card fills in live as that specialist agent completes — score badge, findings, suggested fixes. Click a line number to jump to it. Click Apply to replace the line directly in the editor.</p>
+      <div class="tags">
+        <span class="tag-gray">Toolbar</span>
+        <span class="tag-gray">Context menu</span>
+        <span class="tag-gray">Tree view</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>
+      <h3>Syntax Check (Live System)</h3>
+      <p>Real SAP compiler check via ADT. Creates a temp class, pushes your code, runs checkruns, cleans up. Catches compilation errors static analysis misses. Results in a webview with clickable line numbers.</p>
+      <div class="tags">
+        <span class="tag-gray">Toolbar</span>
+        <span class="tag-gray"><kbd>Ctrl+Shift+F7</kbd></span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M14.5 2v10.5L20 21H4l5.5-8.5V2"/><line x1="8.5" y1="2" x2="15.5" y2="2"/></svg></div>
+      <h3>Generate Test</h3>
+      <p>AI-generated complete ABAP unit test class. Auto-detects AMDP classes and switches to the AMDP Test Double Framework. Opens ready to copy into your test include.</p>
+      <div class="tags">
+        <span class="tag-gray">Toolbar</span>
+        <span class="tag-gray">Context menu</span>
+        <span class="tag-gray">.abap output</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+      <h3>Explain Object</h3>
+      <p>Rich contextual explanation in collapsible sections: Purpose, Public API, Architecture, Key Design Decisions, Dependencies. Hover over any <code>/IBP/</code> identifier in any ABAP file to get a quick version.</p>
+      <div class="tags">
+        <span class="tag-gray">Toolbar</span>
+        <span class="tag-gray">Hover provider</span>
+      </div>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></div>
+      <h3>Compare with SAP System</h3>
+      <p>Fetches the live version from SAP via ADT and opens a native VS Code side-by-side diff. Instantly see what's different between your local file and the system version.</p>
+      <div class="tags">
+        <span class="tag-gray">Toolbar</span>
+        <span class="tag-gray"><kbd>Ctrl+Shift+F8</kbd></span>
+        <span class="tag-gray">Native diff</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- New in this release -->
+<div class="section" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>New capabilities</h2>
+    <p>Recently added to the extension.</p>
+  </div>
+  <div class="grid-3">
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+      <h3>Apply Fix Button</h3>
+      <p>Every review finding with a <code>corrected_code</code> suggestion now has an Apply button. Replaces the target line in the active editor immediately. Ctrl+Z to undo.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M9 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-2"/><rect x="9" y="2" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg></div>
+      <h3>Custom Rules Editor</h3>
+      <p>Manage team-specific review rules directly in VS Code — add, edit, delete, save. Rules are picked up by the review pipeline immediately. Open via the pencil button in the Indexed Objects or Transports view title bar.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+      <h3>Review Score History</h3>
+      <p>Right-click any class → Show Review Score History, or use the graph button in the Indexed Objects title bar. Shows a scored table of all past AI reviews with color-coded trends. Also shown on the Object Dashboard.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="1" y="3" width="15" height="13" rx="1"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+      <h3>Streaming Transport Review</h3>
+      <p>Transport review streams live — 7 agents (Transport Analyst + 6 specialists) fill in as they complete. The full class implementation is always fetched so the LLM sees actual method bodies, not definition-only source.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M6 9H4a2 2 0 0 0-2 2v1a4 4 0 0 0 4 4h1"/><path d="M18 9h2a2 2 0 0 1 2 2v1a4 4 0 0 1-4 4h-1"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 3h10l-1 9a5 5 0 0 1-10 0L7 3z"/></svg></div>
+      <h3>Score Badges on Review</h3>
+      <p>Each agent section shows a color-coded score badge (green ≥ 80, orange ≥ 60, red &lt; 60). An overall score appears in the panel header. Clean agents show a ✓ indicator instead of a finding count.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 1 1-7-7"/><polyline points="16 4 19 4 19 7"/></svg></div>
+      <h3>Current File Quick Actions</h3>
+      <p>When a <code>.abap</code> file is open, IBP Explorer shows a collapsible section at the top with 10 one-click actions for that class: Dashboard, AI Review, Signatures, Version History, Where Used, Hierarchy, Generate Test, Syntax Check, Compare with SAP — no prompts needed.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+      <h3>Recent Activity Panel</h3>
+      <p>A fourth sidebar panel logs every action chronologically — reviews, fetches, dashboards opened, syntax checks, diffs. Each entry shows type, time-ago, and is clickable to re-open the relevant object's dashboard.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="10" width="7" height="11" rx="1"/><line x1="3" y1="3" x2="3" y2="21"/></svg></div>
+      <h3>Stale Cache Badges</h3>
+      <p>Objects cached more than 24 hours ago show a colour-coded staleness indicator directly on the tree item — amber for 1–6 days old, red for 7+ days. Hover to see the exact age and a re-index hint.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="10" width="7" height="11" rx="1"/><line x1="3" y1="3" x2="3" y2="21"/></svg></div>
+      <h3>Live Where Used on Dashboard</h3>
+      <p>The Object Dashboard fetches the Where Used list live from SAP on every open — no longer limited to the local index. Results appear alongside Dependencies, showing all real callers up to 50 entries, clickable to their dashboards.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div>
+      <h3>Method Semantic Index</h3>
+      <p>Extract AI-generated summaries, domain roles, complexity ratings, and tags for every method in a class. The Object Dashboard shows semantics inline per method and a ✎ button lets you edit them directly with VS Code input boxes. Objects with semantics show a <code>[sem]</code> badge in the Indexed Objects tree.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg></div>
+      <h3>Data Preview &amp; Query <span class="badge-new">New</span></h3>
+      <p>Right-click any table or CDS view in the Indexed Objects tree → <strong>Preview Data</strong> to fetch live rows from SAP in a side panel. A filter bar narrows results client-side. The <strong>Query Data</strong> command runs any Open SQL SELECT and shows the result as a sortable table.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- Browsing features -->
+<div class="section" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>Browsing &amp; analysis</h2>
+    <p>Four sidebar panels, interactive graphs, and a full object dashboard.</p>
+  </div>
+  <div class="grid-3">
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+      <h3>Sidebar Panels</h3>
+      <p>IBP Explorer (with current-file quick actions), Transports for CTS contents, Indexed Objects with stale-cache badges, and Recent Activity tracking all actions chronologically.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="10" width="7" height="11" rx="1"/><line x1="3" y1="3" x2="3" y2="21"/></svg></div>
+      <h3>Object Dashboard</h3>
+      <p>Type, description, interfaces, methods, dependencies, live Where Used from SAP (up to 50), version history, and review score history — all loaded in parallel on open. Click any item to navigate its dashboard.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M15 7h3a5 5 0 0 1 0 10h-3m-6 0H6A5 5 0 0 1 6 7h3"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+      <h3>Interactive Graphs</h3>
+      <p>SVG graphs for class hierarchies, CDS view lineage, method call graphs, and where-used references. Click nodes to navigate. Zoom, pan, export SVG.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg></div>
+      <h3>Version History</h3>
+      <p>Timeline webview with main/test class tabs, diff controls, and the ability to view full source at any historical version.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><line x1="2" y1="12" x2="22" y2="12"/><path d="M6 12V7a6 6 0 0 1 12 0v5"/><path d="M6 20a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4"/></svg></div>
+      <h3>Method Signatures</h3>
+      <p>Card-based view of all methods with full parameter tables — direction, name, type, optional flag. Filter by visibility. Click DDIC types to navigate to their definition.</p>
+    </div>
+
+    <div class="feature-card glass-card">
+      <div class="fc-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sap-blue)"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
+      <h3>Inline Diagnostics</h3>
+      <p>Lint-on-save for <code>.abap</code> files. Findings appear as VS Code squiggles and inline problems, allowing you to see issues without opening any panel.</p>
+    </div>
+
+  </div>
+</div>
+
+<!-- Installation -->
+<div class="section" id="ext-install" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>Installation</h2>
+    <p>Build the VSIX from source and install it into VS Code. Requires Node.js 18+ and npm.</p>
+  </div>
+  <div class="grid-2">
+    <div class="install-card">
+      <div class="install-card-header">Build &amp; install the extension</div>
+      <div class="install-card-body">
+        <ol>
+          <li>Clone the repository:
+            <div class="pre-wrap"><pre>git clone https://github.tools.sap/I520242/ibp-abap-int-extension.git
+cd ibp-abap-int-extension</pre><button class="copy-btn">Copy</button></div>
+          </li>
+          <li>Install dependencies and build the VSIX:
+            <div class="pre-wrap"><pre>npm install
+npm run build:vsix</pre><button class="copy-btn">Copy</button></div>
+          </li>
+          <li>In VS Code: <kbd>Ctrl+Shift+P</kbd> → <strong>Extensions: Install from VSIX…</strong></li>
+          <li>Select the generated <code>.vsix</code> file and reload VS Code when prompted</li>
+        </ol>
+      </div>
+    </div>
+    <div class="install-card">
+      <div class="install-card-header">Prerequisites</div>
+      <div class="install-card-body">
+        <ol>
+          <li>Install and start the <strong>MCP server</strong> first (see the MCP Server tab)</li>
+          <li>The extension auto-connects on startup — <code>ibpAbap.autoConnect</code> is <code>true</code> by default</li>
+          <li>For AI toolbar tools, add <code>LLM_PROXY_URL</code>, <code>LLM_API_KEY</code>, and <code>LLM_MODEL</code> to the server's <code>.env</code></li>
+          <li>For live syntax check, the SAP system must have a <code>TEST_SYNTAX_CHECK</code> package under <code>$TMP</code></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="section" id="ext-settings" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>Settings</h2>
+    <p>Configure via VS Code settings (<kbd>Ctrl+,</kbd>) under the "IBP ABAP" category.</p>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Setting</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>ibpAbap.serverCommand</td><td>sap-ibp-abap-int</td><td>Command used to launch the MCP server process</td></tr>
+      <tr><td>ibpAbap.envFile</td><td>—</td><td>Path to .env file with SAP credentials (auto-detected if empty)</td></tr>
+      <tr><td>ibpAbap.dataDir</td><td>—</td><td>Path to MCP server data directory (auto-detected if empty)</td></tr>
+      <tr><td>ibpAbap.autoConnect</td><td>true</td><td>Connect to MCP server automatically on extension activation</td></tr>
+      <tr><td>ibpAbap.lintOnSave</td><td>true</td><td>Run static ABAP lint when saving .abap files</td></tr>
+      <tr><td>ibpAbap.maxSearchResults</td><td>50</td><td>Maximum number of search results to show</td></tr>
+    </tbody>
+  </table>
+  </div>
+</div>
+
+</div><!-- /content-extension -->
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!--  FAQ (outside tabs)                                        -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="section" id="faq" style="border-top:1px solid var(--gray-100)">
+  <div class="section-header">
+    <h2>Frequently asked questions</h2>
+  </div>
+  <div class="faq">
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        Does it write anything to the SAP system?
+        <span class="faq-chevron">▼</span>
+      </button>
+      <div class="faq-a">No. The MCP server is strictly read-only. It fetches source code and metadata via ADT REST APIs but never creates, modifies, or transports objects. The only exception is the syntax check, which creates a temporary class under $TMP, runs the check, and immediately deletes it.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        What SAP permissions do I need?
+        <span class="faq-chevron">▼</span>
+      </button>
+      <div class="faq-a">A standard developer user with ADT access (S_DEVELOP authorization object). No special authorizations beyond normal ABAP Workbench access are required. For the syntax check, the user needs create/delete authorization on the TEST_SYNTAX_CHECK package under $TMP.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        Can I use it offline without a SAP connection?
+        <span class="faq-chevron">▼</span>
+      </button>
+      <div class="faq-a">Yes. Once objects are fetched and cached in SQLite, all search, analysis, code review, and generation tools work fully offline. You only need a SAP connection to fetch new objects, run syntax checks, or refresh stale cache entries.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        Which AI clients are supported?
+        <span class="faq-chevron">▼</span>
+      </button>
+      <div class="faq-a">Any MCP-compatible client: Claude Code, Cline (VS Code), GitHub Copilot (via .vscode/mcp.json), or any other tool that speaks the Model Context Protocol over stdio. The VS Code extension works independently and does not require a separate AI client.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        Is this an official SAP product?
+        <span class="faq-chevron">▼</span>
+      </button>
+      <div class="faq-a">No. This is an unofficial internal-only initiative. It is not supported by SAP product teams and should only be used for investigation and non-productive code development. Do not use it for productive systems or distribute outside SAP.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        How does the rules engine work?
+        <span class="faq-chevron">▼</span>
+      </button>
+      <div class="faq-a">The rules database (<code>rules.db</code>) contains 2 795 tagged rules from IBP Conventions (13 topics), CleanABAP (134 sections), and IBP domain documentation (2 646 chunks). Each rule has a source, category (naming/methods/exceptions/etc.), and purpose (write/review/test). <code>get_rules(query, purpose)</code> uses FTS5 to return the most relevant rules before any code task. Team-specific rules can be added via the VS Code custom rules editor and are stored in <code>rules.json</code>.</div>
+    </div>
+
+    <div class="faq-item">
+      <button class="faq-q" onclick="toggleFaq(this)">
+        How is the cache kept up to date?
+        <span class="faq-chevron">▼</span>
+      </button>
+      <div class="faq-a">Cached objects have a configurable TTL (default 24 hours). Classes use a lightweight version-list check — if the SAP version list changed, the object is re-fetched. Non-class objects (tables, CDS views, structures) are re-fetched when their TTL expires. <code>diff_with_sap</code> and <code>get_sap_source</code> opportunistically update the index when they detect differences — zero extra round-trips.</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Footer -->
+<footer>
+  SAP IBP ABAP Intelligence &middot; Unofficial &middot; SAP Internal Use Only &middot; Not for productive use<br><br>
+  <a href="https://github.tools.sap/I520242/ibp-bud6-mcp">MCP Server</a> &middot;
+  <a href="https://github.tools.sap/I520242/ibp-abap-int-extension">VS Code Extension</a> &middot;
+  <a href="https://github.tools.sap/I520242/ibp_unofficial_abap_mcp/issues">Issues</a>
+</footer>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img src="" alt="">
+</div>
+
+<script>
+function switchTab(t) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+  document.getElementById('tab-' + t).classList.add('active');
+  document.getElementById('content-' + t).classList.add('active');
+  const navEl = document.getElementById('nav-' + t);
+  if (navEl) navEl.classList.add('active');
+  const tabsTop = document.querySelector('.tabs-wrap').offsetTop;
+  window.scrollTo({ top: tabsTop - 60, behavior: 'smooth' });
+}
+
+if (location.hash === '#extension') switchTab('extension');
+if (location.hash === '#server') switchTab('server');
+
+function filterTools(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#tool-table tbody tr').forEach(r => {
+    r.style.display = !q || r.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function toggleFaq(btn) {
+  btn.closest('.faq-item').classList.toggle('open');
+}
+
+function openLightbox(src) {
+  document.querySelector('#lightbox img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('pre').forEach(pre => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pre-wrap';
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'Copy';
+    btn.onclick = () => {
+      navigator.clipboard.writeText(pre.textContent).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+      });
+    };
+    wrap.appendChild(btn);
+  });
+});
+</script>
+</body>
+</html>
