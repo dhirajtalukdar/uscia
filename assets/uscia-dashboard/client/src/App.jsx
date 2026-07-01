@@ -113,6 +113,23 @@ const rcClass = rc => {
 };
 
 /* ── App ─────────────────────────────────────────────────────────────────── */
+
+// Derive first name from browser environment — SAP Launchpad injects
+// window.sap?.ushell?.Container user info; fallback to URL param or 'Consultant'
+function getFirstName() {
+  try {
+    const u = window.sap?.ushell?.Container?.getService?.('UserInfo');
+    if (u) {
+      const fn = u.getFirstName?.() || u.getFullName?.()?.split(' ')[0];
+      if (fn) return fn;
+    }
+  } catch (_) {}
+  const p = new URLSearchParams(window.location.search);
+  return p.get('user') || p.get('name') || 'Consultant';
+}
+
+const FIRST_NAME = getFirstName();
+
 export default function App() {
   const [messages, setMessages]     = useState([{ id:'w', role:'agent', status:'done', timestamp:new Date(), content:'USCIA_WELCOME' }]);
   const [input, setInput]           = useState('');
@@ -278,7 +295,7 @@ export default function App() {
               ? active.status === 'error'
                 ? <div style={{padding:'2rem',color:'#BB0000'}}>{active.content}</div>
                 : <ReportView query={activeQ} content={active.content} timestamp={active.timestamp} view={view} />
-              : <WelcomeScreen onPick={t => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50); }} />
+              : <WelcomeScreen userName={FIRST_NAME} onPick={t => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50); }} />
             }
             {pendingApproval && (
               <div className="approval-gate">
@@ -422,7 +439,7 @@ export default function App() {
   );
 }
 
-function WelcomeScreen({ onPick }) {
+function WelcomeScreen({ onPick, userName }) {
   const examples = [
     'Why is planned order for AUGUST21_S1 plant 0001 missing in MD04?',
     'Planned order not reaching PP/DS RRP3 for material X-5678 plant 2000',
@@ -446,10 +463,11 @@ function WelcomeScreen({ onPick }) {
           <polygon points="28,30 16,22 28,46" fill="#7C3AED" opacity="0.5"/>
         </svg>
       </div>
-      <div className="welcome-title">Supply Chain Intelligence</div>
+      <div className="welcome-title">Good {getGreeting()}, {userName}.</div>
       <div className="welcome-desc">
-        Diagnoses cross-system SAP planning failures across IBP → S/4HANA MRP → PP/DS
-        in under 5 minutes. Type your incident on the right or pick an example below.
+        I'm USCIA — your supply chain forensic agent. I investigate planning failures
+        across SAP IBP → RTI/CIF → S/4HANA MRP → PP/DS → aATP in under 5 minutes.
+        Describe the issue below or pick an example.
       </div>
       <div className="welcome-grid">
         {examples.map((ex, i) => (
@@ -461,4 +479,11 @@ function WelcomeScreen({ onPick }) {
       </div>
     </div>
   );
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'morning';
+  if (h < 17) return 'afternoon';
+  return 'evening';
 }
