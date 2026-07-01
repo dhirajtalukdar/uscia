@@ -114,18 +114,28 @@ const rcClass = rc => {
 
 /* ── App ─────────────────────────────────────────────────────────────────── */
 
-// Derive first name from browser environment — SAP Launchpad injects
-// window.sap?.ushell?.Container user info; fallback to URL param or 'Consultant'
+// Derive first name — priority order:
+// 1. SAP Launchpad UserInfo service (when running inside Joule/Fiori)
+// 2. ?user= or ?name= URL query param
+// 3. localStorage (remembered from previous session)
+// 4. 'Consultant' fallback
 function getFirstName() {
   try {
     const u = window.sap?.ushell?.Container?.getService?.('UserInfo');
     if (u) {
       const fn = u.getFirstName?.() || u.getFullName?.()?.split(' ')[0];
-      if (fn) return fn;
+      if (fn && fn.trim()) return fn.trim();
     }
   } catch (_) {}
   const p = new URLSearchParams(window.location.search);
-  return p.get('user') || p.get('name') || 'Consultant';
+  const qp = p.get('user') || p.get('name');
+  if (qp && qp.trim()) {
+    localStorage.setItem('uscia_user_name', qp.trim());
+    return qp.trim();
+  }
+  const stored = localStorage.getItem('uscia_user_name');
+  if (stored && stored.trim()) return stored.trim();
+  return 'Consultant';
 }
 
 const FIRST_NAME = getFirstName();
@@ -139,6 +149,12 @@ export default function App() {
   const [online, setOnline]         = useState(null);
   const [activeId, setActiveId]     = useState(null);
   const [pendingApproval, setPending] = useState(false);
+  const [userName, setUserName]     = useState(FIRST_NAME);
+
+  const handleSetName = (name) => {
+    localStorage.setItem('uscia_user_name', name);
+    setUserName(name);
+  };
 
   const ctxRef   = useRef(SESSION_ID);
   const msgsRef  = useRef(messages);
@@ -295,7 +311,7 @@ export default function App() {
               ? active.status === 'error'
                 ? <div style={{padding:'2rem',color:'#BB0000'}}>{active.content}</div>
                 : <ReportView query={activeQ} content={active.content} timestamp={active.timestamp} view={view} />
-              : <WelcomeScreen userName={FIRST_NAME} onPick={t => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50); }} />
+              : <WelcomeScreen userName={userName} onSetName={handleSetName} onPick={t => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50); }} />
             }
             {pendingApproval && (
               <div className="approval-gate">
@@ -439,7 +455,10 @@ export default function App() {
   );
 }
 
-function WelcomeScreen({ onPick, userName }) {
+function WelcomeScreen({ onPick, userName, onSetName }) {
+  const [editing, setEditing] = React.useState(false);
+  const [nameInput, setNameInput] = React.useState('');
+  const isDefault = !userName || userName === 'Consultant';
   const examples = [
     'Why is planned order for AUGUST21_S1 plant 0001 missing in MD04?',
     'Planned order not reaching PP/DS RRP3 for material X-5678 plant 2000',
@@ -463,7 +482,36 @@ function WelcomeScreen({ onPick, userName }) {
           <polygon points="28,30 16,22 28,46" fill="#7C3AED" opacity="0.5"/>
         </svg>
       </div>
-      <div className="welcome-title">Good {getGreeting()}, {userName}.</div>
+
+      {editing ? (
+        <div className="welcome-name-edit">
+          <input
+            className="welcome-name-input"
+            autoFocus
+            placeholder="Enter your first name"
+            value={nameInput}
+            onChange={e => setNameInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && nameInput.trim()) {
+                onSetName(nameInput.trim());
+                setEditing(false);
+              }
+              if (e.key === 'Escape') setEditing(false);
+            }}
+          />
+          <button className="welcome-name-btn" onClick={() => {
+            if (nameInput.trim()) { onSetName(nameInput.trim()); setEditing(false); }
+          }}>Set name</button>
+        </div>
+      ) : (
+        <div className="welcome-title" title="Click to set your name" onClick={() => { if(isDefault){ setEditing(true); setNameInput(''); } }}>
+          Good {getGreeting()}{isDefault
+            ? <span className="welcome-name-prompt"> — <span style={{textDecoration:'underline',cursor:'pointer',fontSize:'0.9em',opacity:0.7}}>click to set your name</span></span>
+            : `, ${userName}.`
+          }
+        </div>
+      )}
+
       <div className="welcome-desc">
         I'm USCIA — your supply chain forensic agent. I investigate planning failures
         across SAP IBP → RTI/CIF → S/4HANA MRP → PP/DS → aATP in under 5 minutes.

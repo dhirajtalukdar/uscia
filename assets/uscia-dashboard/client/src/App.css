@@ -631,3 +631,17 @@ html, body { height: 100%; font-family: var(--font); }
 .btn-approve { background: var(--success); color: #fff; }
 .btn-reject  { background: var(--error);   color: #fff; }
 .btn-approve:hover, .btn-reject:hover { opacity: 0.88; }
+
+/* ── Welcome name edit ───────────────────────────────── */
+.welcome-name-edit { display:flex; gap:8px; align-items:center; margin:4px 0 8px; }
+.welcome-name-input {
+  border:1px solid #6236FF; border-radius:8px; padding:6px 12px;
+  font-size:1rem; outline:none; background:#f9f7ff; width:180px;
+}
+.welcome-name-input:focus { border-color:#8B5CF6; box-shadow:0 0 0 2px #ede9fe; }
+.welcome-name-btn {
+  background:#6236FF; color:#fff; border:none; border-radius:8px;
+  padding:6px 14px; cursor:pointer; font-size:0.9rem;
+}
+.welcome-name-btn:hover { background:#7c3aed; }
+.welcome-name-prompt { color:#9CA3AF; font-size:0.85em; }
