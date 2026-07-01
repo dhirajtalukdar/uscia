@@ -949,6 +949,33 @@ class SampleAgent:
             ctx.material = "*"  # Signal to tools that material filter is not applicable
             logger.info("orchestrator: plant-level incident — setting material=* (no filter)")
 
+        # ── Extract expected source from conversation history ─────────────────
+        # If user confirmed expected source (RTI, MRP, IBP, PP/DS, upload) in any turn,
+        # store it in continuity_keys so the classifier can use it.
+        if not ctx.continuity_keys.get("expected_source"):
+            _source_keywords = {
+                "rti": "IBP RTI", "ibp rti": "IBP RTI", "ibp": "IBP RTI",
+                "cpi": "IBP RTI", "integration": "IBP RTI",
+                "mrp": "MRP", "mps": "MRP",
+                "pp/ds": "PP/DS", "ppds": "PP/DS", "cif": "PP/DS",
+                "upload": "upload", "excel": "upload", "manual": "manual",
+            }
+            # Check current query and recent history for source confirmation
+            search_text = query.lower()
+            for turn in history[-4:]:
+                search_text += " " + turn.get("content", "").lower()
+            for kw, source in _source_keywords.items():
+                if kw in search_text:
+                    ctx.continuity_keys["expected_source"] = source
+                    logger.info("orchestrator: expected_source detected = %s", source)
+                    break
+
+        # Also infer from incident type
+        _IBP_RTI_INCIDENT_TYPES = {"RTI/CPI message failure", "IBP planning job failure"}
+        if ctx.incident_type in _IBP_RTI_INCIDENT_TYPES and not ctx.continuity_keys.get("expected_source"):
+            ctx.continuity_keys["expected_source"] = "IBP RTI"
+            logger.info("orchestrator: expected_source inferred from incident_type = IBP RTI")
+
         # INVESTIGATE or INVESTIGATE_LIMITED — proceed; remember limitations for the report
         limited_disclaimer = ""
         if action == "INVESTIGATE_LIMITED" and orchestration["limitations"]:

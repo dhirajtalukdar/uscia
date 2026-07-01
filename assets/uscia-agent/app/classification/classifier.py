@@ -317,6 +317,77 @@ def classify(
         kg_bp_ids = ctx.kg_bp_ids
     rules = _apply_kg_bias(rules, kg_bp_ids)
 
+    # ── Expected source override: when user confirmed IBP/RTI as source ─────────
+    # If the conversation context carries an expected_source of IBP or RTI,
+    # and IBP returns MISSING DATA, we cannot run the primary diagnostic path.
+    # Force INCONCLUSIVE rather than firing an MRP/master-data rule that is
+    # irrelevant to the stated investigation path.
+    # This implements Section 8.4 + Section 7 of USCIA_LLM_Functional_Instructions:
+    # "The verdict depends on the expected source."
+    expected_source = ""
+    if ctx is not None:
+        expected_source = (
+            ctx.continuity_keys.get("expected_source", "") or
+            ctx.continuity_keys.get("_premise_type", "") or
+            ""
+        ).lower()
+
+    _ibp_rti_sources = {"ibp", "rti", "ibp rti", "ibp-rti", "cpi", "rti/cpi", "rtl"}
+    _source_is_ibp_rti = any(s in expected_source for s in _ibp_rti_sources)
+
+    # Also infer from incident type
+    _rti_incident_types = {"RTI/CPI message failure", "IBP planning job failure"}
+    if ctx is not None and ctx.incident_type in _rti_incident_types:
+        _source_is_ibp_rti = True
+
+    ibp_missing = _is_missing(payload, "IBP_SUPPLY") and _is_missing(payload, "SAP_CPI")
+
+    if _source_is_ibp_rti and ibp_missing:
+        # IBP/RTI path is blocked — return INCONCLUSIVE, not a master-data verdict
+        root_cause = "RTI_CPI_MESSAGE_FAILURE"
+        confidence = "INDETERMINATE"
+        description = (
+            "The expected source of this planned order is IBP/RTI. "
+            "However, IBP and CPI/RTI evidence are not available in this deployment "
+            "(IBP credentials pending configuration). "
+            "The investigation cannot confirm or deny an RTI transfer failure without "
+            "IBP supply data and CPI message logs. "
+            "S/4HANA MRP/master data checks were run and those results are shown, "
+            "but they are not the primary investigation path for an IBP RTI scenario. "
+            "This verdict is INDETERMINATE — configure IBP credentials to complete investigation."
+        )
+        confirmed_ibp = [f"[MISSING DATA] IBP_SUPPLY: IBP credentials not configured — cannot verify IBP planning output for this material/location."]
+        confirmed_ibp += [f"[MISSING DATA] SAP_CPI: CPI/RTI message logs not available — cannot verify RTI transfer chain."]
+        confirmed_ibp += confirmed
+        action_def = _DEFAULT_ACTIONS["RTI_CPI_MESSAGE_FAILURE"]
+        action = RemediationAction(
+            action_id=str(uuid.uuid4()),
+            action_type=action_def["action_type"],
+            action_params={
+                "root_cause": root_cause,
+                "description": action_def["description"],
+                "material": getattr(graph, "_material", ""),
+                "plant": getattr(graph, "_plant", ""),
+                "blocked_reason": "IBP credentials not configured — configure IBP destination to complete RTI investigation",
+            },
+            requires_approval=True,
+            rank=1,
+        )
+        logger.info(
+            "M4.achieved: root cause classified — category=%s, confidence=%s (IBP/RTI source, IBP MISSING)",
+            root_cause, confidence,
+        )
+        return Classification(
+            root_cause=root_cause,
+            confidence=confidence,
+            confirmed_findings=confirmed_ibp,
+            probable_findings=probable,
+            missing_findings=missing,
+            remediation_actions=[action],
+            rule_id="RC_IBP_BLOCKED",
+            description=description,
+        )
+
     confirmed: list[str] = []
     probable: list[str] = []
     missing: list[str] = []
