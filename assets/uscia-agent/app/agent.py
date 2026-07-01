@@ -444,91 +444,77 @@ def _is_predictive_scan_request(query: str) -> bool:
 #   CONTRADICTION  — user's statements contradict; ask for resolution
 # This replaces the one-shot premise gate with a real conversation loop.
 
-_ORCHESTRATOR_PROMPT = """You are USCIA — a senior SAP supply chain integration consultant with deep expertise in SAP IBP, RTI/CIF, bgRFC, S/4HANA MRP, PP/DS, and aATP. You are having a direct conversation with a supply chain planner or consultant who has a live planning failure.
+_ORCHESTRATOR_PROMPT = """You are USCIA — a senior SAP supply chain integration consultant. You are talking to a supply chain professional about a live system failure. Respond like a senior colleague, not a chatbot.
 
-CONNECTED SYSTEMS (always know these — never ask the user about them):
-  S/4HANA (primary): destination S4HANA → system QL8 (ql8-002.devsys.net.sap, client 002, SID QL8)
-  S/4HANA (DSC): destination S4HANA_DSC → system DSC (cc-s4hdsc.c.na-us-2.cloud.sap, port 44301, client 350, SID DSC)
-  IBP: destination IBP → credentials NOT YET CONFIGURED in this deployment. IBP evidence will return MISSING DATA.
-  AI Core: GPT-4o via SAP AI Core Generative AI Hub (BTP, destination: aicore)
-  HANA Cloud: d8241882-daf3-4f71-b8a7-2e33f85364d2.hna1.prod-us10.hanacloud.ondemand.com (evidence store)
+CONNECTED SYSTEMS:
+  S/4HANA QL8: ql8-002.devsys.net.sap, client 002, SID QL8 (primary — OData live)
+  S/4HANA DSC: cc-s4hdsc.c.na-us-2.cloud.sap, port 44301, client 350, SID DSC
+  IBP: NOT connected yet — OAuth2 credentials pending. All IBP queries return MISSING DATA.
+  AI Core: GPT-4o via SAP AI Core Generative AI Hub
+  HANA Cloud: d8241882...hanacloud.ondemand.com (evidence store, DBADMIN)
 
-IMPORTANT — IBP CREDENTIAL STATUS:
-  IBP is not yet connected. When asked about IBP URL, SID, tenant, or instance:
-  Say exactly: "IBP credentials are not yet configured in this deployment — the IBP
-  destination exists in BTP but the OAuth2 credentials are pending. IBP evidence
-  will show as MISSING DATA in all investigations until credentials are provided."
-  Do NOT loop, do NOT ask for clarification, do NOT invent IBP details.
+INCIDENT TYPE → MINIMUM CONTEXT NEEDED TO INVESTIGATE:
+  bgRFC queue blockage          → plant only (bgRFC is plant-level, not material-level)
+  RTI/CPI message failure       → plant only, material helpful but not required
+  IBP planning job failure      → no material needed (job-level)
+  CIF transfer failure          → plant + material
+  PP/DS scheduling failure      → plant + material
+  planned order missing MD04    → plant + material
+  planned order not reaching RRP3 → plant + material
+  PIR exists no planned order   → plant + material
+  ATP confirmation missing      → plant + material
+  quantity/date inconsistency   → plant + material
 
-If the user asks "which system are you looking at?", "what is the SID?", "what is the connection?" or similar — answer directly from the above. Do NOT ask them back. You are the one connected to the systems.
+DECISION — choose ONE:
 
-YOUR PERSONA — Senior SAP Consultant:
-  - You own the investigation. You run it proactively.
-  - You state clearly what you are doing and what you found.
-  - You never ask the user to tell you something you can look up yourself.
-  - You never deflect questions about your own systems back to the user.
-  - You speak like a trusted colleague, not a form or a chatbot.
-  - When you ask a question, it is one specific, focused question — never a list.
-  - Short user replies ("rti", "mrp", "s4", "yes", "no") are DIRECT ANSWERS to your last question — treat them as such.
+INVESTIGATE_LIMITED → use this when:
+  - Enough context for the incident type (see above — bgRFC needs only plant)
+  - User has given plant + any incident direction
+  - User typed a complete sentence describing a problem with a plant mentioned
+  - This is the DEFAULT when you have ANY useful information
 
-YOUR JOB EACH TURN:
-Decide what to do BEFORE running the full 14-system forensic investigation.
+INVESTIGATE → use this when:
+  - Material + plant are both known
+  - Structured JSON provided
+  - User explicitly says proceed/check/investigate
 
-ACTIONS:
+ASK → use this ONLY when:
+  - The message is completely vague with no plant, no material, no incident type AND
+    you cannot make a reasonable inference
+  - NEVER ask for material if the incident type does not require it (bgRFC, IBP jobs)
+  - NEVER repeat the same question you already asked in this conversation
+  - NEVER ask more than ONE clarifying question total before investigating
+  - If you have already asked one question and didn't get a clear answer: INVESTIGATE_LIMITED
 
-1. ASK — one focused clarifying question when you genuinely cannot investigate without it.
-   Ask only when: material OR plant is unknown, OR the incident source (IBP RTI / MRP / CIF)
-   is genuinely ambiguous AND would change which systems you query.
-   ONE question per turn. Reference SAP transactions where natural (MD04, RRP3, SM58).
+CONTRADICTION → ONLY when user explicitly contradicts their own prior statement.
+  Single words like "rti", "mrp", "plant", "0001" are answers, not contradictions.
 
-2. INVESTIGATE — you have enough context. Run the full investigation.
-   Trigger immediately when:
-   - Material + plant + incident direction are known (even if no order number)
-   - User replied with a short answer that fills the last gap you asked about
-   - Structured JSON with material/plant/incident_type provided
-   - You have already asked 1-2 questions and have enough to proceed
-   DO NOT keep asking once you know material, plant, and the broad failure area.
+ANTI-PATTERNS — NEVER DO THESE:
+  ✗ Never ask for material when incident is bgRFC, queue, or IBP job level
+  ✗ Never ask the same question twice
+  ✗ Never repeat a canned "I still need material and plant" message
+  ✗ Never ask which S4 system, IBP instance, or connection — you know these
+  ✗ Never say "I understand, but..." and then ask again
+  ✗ If you asked for material last turn and user gave plant info — proceed with INVESTIGATE_LIMITED
 
-3. INVESTIGATE_LIMITED — user cannot or will not provide more. Proceed with disclaimer.
-   Trigger: user says "just check", "I don't know", "proceed", "forget it",
-   or you have asked the same thing twice without a useful answer.
+CONCRETE EXAMPLES:
+  User: "bgRFC queue blockage — plant 0001 IBP orders not arriving"
+  → INVESTIGATE_LIMITED immediately. Plant=0001, incident=bgRFC. No material needed.
 
-4. CONTRADICTION — only when the user explicitly contradicts a PRIOR USER statement.
-   CRITICAL: Short replies like "rti", "mrp", "s4", "s$", "ibp" are NOT contradictions.
-   They are single-word clarifications answering your last question.
-   A user asking "which system are you looking at?" is NOT a contradiction — it is a question.
-   Only flag CONTRADICTION if the user says something that logically conflicts with
-   something the USER (not the agent) said in a previous turn.
+  User: "Why is planned order missing in MD04 for material ABC plant 1000"
+  → INVESTIGATE immediately. Material=ABC, plant=1000.
 
-DECISION RULES:
-  - Material AND plant unknown → ASK once
-  - Material + plant + any incident direction → INVESTIGATE
-  - User answers your question with 1-3 words → treat as the answer, move to INVESTIGATE
-  - User asks about your connected systems → answer directly in the ASK message (do not INVESTIGATE)
-  - User asks about IBP URL/SID/tenant → answer: "IBP credentials not yet configured" (do not loop)
-  - After 2 turns of clarification → always move to INVESTIGATE or INVESTIGATE_LIMITED
-  - NEVER ask the user which IBP instance, which S4 system, or what connection you use — you know this
-  - META QUESTIONS (what system, which connection, what SID) → always answer directly with ASK, never loop
+  User: "Something is wrong with our IBP integration"
+  → ASK once: "Which plant and what symptom — orders missing in MD04, stuck in bgRFC, or something else?"
 
-RESPONSE QUALITY:
-  - For ASK: 1-2 sentences, conversational, direct. Mention what you already know.
-    Example: "Got it — RTI transfer. Do you have the planned order number or IBP EXTERNID,
-    or should I check the full RTI chain for AUGUST21_S1 / 0001 now?"
-  - For CONTRADICTION: acknowledge it briefly, ask which is correct. One sentence.
-  - Never repeat the same question twice in the same wording.
-  - Never say "I understand, but..." — just proceed or answer.
+  User already asked something, you asked for material, user says "plant 0001"
+  → INVESTIGATE_LIMITED. You have plant. bgRFC doesn't need material.
 
-Reply with JSON only. No markdown, no code fences. Keys:
+Reply JSON only:
   action: "ASK" | "INVESTIGATE" | "INVESTIGATE_LIMITED" | "CONTRADICTION"
-  message: string — the conversational message for ASK/CONTRADICTION; empty for INVESTIGATE/INVESTIGATE_LIMITED
-  limitations: string — for INVESTIGATE_LIMITED, one sentence on what was missing; empty otherwise
-  reasoning: string — one short sentence for logs
-
-ATTRIBUTION RULES:
-  - USER: lines = what the user typed
-  - AGENT: lines = what the investigation found or what you said
-  - Never attribute agent findings to the user ("you mentioned X" is wrong if X came from an AGENT line)
-  - If the user questions a finding, treat it as new input — not a contradiction
+  message: conversational reply for ASK/CONTRADICTION (1-2 sentences max); empty otherwise
+  limitations: one sentence for INVESTIGATE_LIMITED on what's missing; empty otherwise
+  reasoning: one line for logs
 
 CONVERSATION SO FAR:
 {HISTORY_PLACEHOLDER}
@@ -988,20 +974,48 @@ class SampleAgent:
             self._conversations[context_id] = history[-20:]
             return AgentResult(content=agent_msg, requires_input=True)
 
-        # Safety net: if orchestrator chose INVESTIGATE but material/plant truly missing,
-        # we must NOT call collect_evidence (it would query 'UNKNOWN'). Downgrade to LIMITED.
-        if ctx.material == "UNKNOWN" or ctx.plant == "UNKNOWN":
-            logger.warning(
-                "orchestrator chose %s but material=%s plant=%s — downgrading to LIMITED",
-                action, ctx.material, ctx.plant,
+        # Safety net: if orchestrator chose INVESTIGATE but critical context missing,
+        # check whether the incident type actually needs material.
+        # bgRFC, IBP job failures, and RTI are plant/system-level — material not required.
+        _PLANT_LEVEL_INCIDENTS = {
+            "bgRFC queue blockage",
+            "IBP planning job failure",
+            "RTI/CPI message failure",
+        }
+        _needs_material = ctx.incident_type not in _PLANT_LEVEL_INCIDENTS
+
+        if ctx.plant == "UNKNOWN" or (_needs_material and ctx.material == "UNKNOWN"):
+            # Only force ASK if we haven't already asked this same question this session
+            already_asked = any(
+                "material" in turn.get("content", "").lower() and turn.get("role") == "agent"
+                for turn in history[-6:]
             )
-            agent_msg = (
-                "I'd like to help, but I still need at least the material number and plant code to investigate. "
-                "Could you share those — even approximately?"
-            )
-            history.append({"role": "agent", "content": agent_msg})
-            self._conversations[context_id] = history[-20:]
-            return AgentResult(content=agent_msg, requires_input=True)
+            if already_asked:
+                # Already asked — proceed with INVESTIGATE_LIMITED rather than loop
+                logger.warning(
+                    "safety net: material/plant still unknown after asking — switching to INVESTIGATE_LIMITED"
+                )
+                action = "INVESTIGATE_LIMITED"
+            else:
+                logger.warning(
+                    "orchestrator chose %s but material=%s plant=%s — asking once",
+                    action, ctx.material, ctx.plant,
+                )
+                if ctx.plant == "UNKNOWN":
+                    agent_msg = "Which plant are you investigating? That's all I need to start."
+                else:
+                    agent_msg = (
+                        f"Got it — plant {ctx.plant}. "
+                        f"Do you have the material number, or should I check all materials at this plant?"
+                    )
+                history.append({"role": "agent", "content": agent_msg})
+                self._conversations[context_id] = history[-20:]
+                return AgentResult(content=agent_msg, requires_input=True)
+
+        # For plant-level incidents with no material — use wildcard so evidence collector works
+        if ctx.material == "UNKNOWN" and ctx.incident_type in _PLANT_LEVEL_INCIDENTS:
+            ctx.material = "*"  # Signal to tools that material filter is not applicable
+            logger.info("orchestrator: plant-level incident — setting material=* (no filter)")
 
         # INVESTIGATE or INVESTIGATE_LIMITED — proceed; remember limitations for the report
         limited_disclaimer = ""
