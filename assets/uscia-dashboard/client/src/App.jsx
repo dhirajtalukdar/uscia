@@ -102,9 +102,20 @@ function precedingQuery(msgs, id) {
 }
 
 const fmt = d => d ? (d instanceof Date ? d : new Date(d)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-const parseRC = c => c?.match(/Root Cause:\s*([^\n\[]+)/i)?.[1]?.trim() || null;
-const parseMat = c => c?.match(/Investigation:\s*([^\s/]+)/i)?.[1]?.trim() || null;
-const parsePlant = c => c?.match(/Investigation:.*\/\s*Plant\s+([^\s\n]+)/i)?.[1]?.trim() || null;
+// Only parse report card fields from actual forensic reports (not approval gate or disclaimer text)
+// Reports contain "## Investigation:" header; approval gate messages do not
+const parseRC = c => {
+  if (!c?.includes('## Investigation:')) return null;
+  return c?.match(/##\s+Root Cause:\s*([^\n\[]+)/)?.[1]?.trim() || null;
+};
+const parseMat = c => {
+  if (!c?.includes('## Investigation:')) return null;
+  return c?.match(/##\s+Investigation:\s*([^\s/]+)/)?.[1]?.trim() || null;
+};
+const parsePlant = c => {
+  if (!c?.includes('## Investigation:')) return null;
+  return c?.match(/##\s+Investigation:.*\/\s*Plant\s+([^\s\n]+)/)?.[1]?.trim() || null;
+};
 const rcClass = rc => {
   if (!rc) return 'info';
   if (rc.includes('NOT_FOUND') || rc.includes('FAILURE') || rc.includes('ERROR')) return 'error';
@@ -206,7 +217,9 @@ export default function App() {
       const data = await res.json();
       ctxRef.current = data.contextId || ctxRef.current;
       const report = extractReport(data.result);
-      const isApproval = report?.includes('PENDING_APPROVAL');
+      const isApproval = report?.includes('Action Approval Required') ||
+                         report?.includes('PENDING_APPROVAL') ||
+                         report?.includes('Do you want to proceed');
       if (isApproval) setPending(true);
       updateAgent({ content: report || '⚠️ Empty response', status:'done', requiresApproval:isApproval });
     } catch (e) {
@@ -377,9 +390,34 @@ export default function App() {
                   </div>
                 );
                 const isRep = msg.content?.includes('## Investigation:');
+                const isApprovalMsg = msg.content?.includes('Action Approval Required') ||
+                                      msg.content?.includes('Do you want to proceed');
+
+                // Approval gate message — render as special card, not truncated text
+                if (isApprovalMsg && !isRep) {
+                  return (
+                    <div key={msg.id} className="msg-agent">
+                      <div className="msg-agent-bubble msg-approval-gate">
+                        <div className="approval-gate-inline-hdr">
+                          <span className="uscia-badge">✦ USCIA</span>
+                          <span style={{fontSize:'0.62rem',color:'#9CA3AF'}}>{fmt(msg.timestamp)}</span>
+                        </div>
+                        <div className="approval-gate-inline-body">
+                          {msg.content
+                            ?.split('\n')
+                            .filter(l => l.trim() && !l.startsWith('<!--'))
+                            .map((l,i) => <div key={i}>{l}</div>)
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Conversational / ASK message — show full text, no truncation
                 if (!isRep) return (
                   <div key={msg.id} className="msg-agent">
-                    <div className="msg-agent-bubble">{msg.content?.slice(0,280)}{msg.content?.length>280?'…':''}</div>
+                    <div className="msg-agent-bubble">{msg.content}</div>
                     <div className="msg-time">{fmt(msg.timestamp)}</div>
                   </div>
                 );

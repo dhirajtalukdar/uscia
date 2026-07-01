@@ -546,11 +546,18 @@ async def _llm_orchestrate(
 
 _CANONICAL_QUERY_PROMPT = """Below is a conversation between a user and an SAP supply chain consultant agent.
 
-The user described a problem, possibly across multiple turns. Some user messages are short clarification replies (like "0001", "yes", "M-2222 plant 3000") — these are NOT the real question.
+The user described a problem, possibly across multiple turns.
 
-Your job: extract the ONE canonical question the user is actually trying to get answered. Write it as a single, complete, natural-language question. Preserve material numbers, plant codes, and any specific details the user mentioned. If the conversation has only one substantive question, return it as-is (cleaned up to a full sentence).
+Rules for extracting the canonical question:
+- Short clarification replies ("0001", "yes", "RTI", "MRP", "no") are NOT the real question — they are answers to agent questions
+- Greetings ("hi", "hello", "ok", "thanks") are NOT the real question — ignore them
+- The real question is the user's substantive problem statement — it describes a symptom, a missing object, or an integration failure
+- Preserve all specifics: material numbers, plant codes, incident descriptions, system names
+- If there are multiple substantive user messages, synthesize them into ONE coherent question
+- Write as a single complete sentence ending with a question mark
 
 Reply with ONLY the question as a plain string. No JSON, no quotes, no preamble. Maximum 200 characters.
+If no substantive question is found (only greetings or short replies), return: "Investigation query not captured — see report for details."
 
 CONVERSATION:
 {HISTORY_PLACEHOLDER}
@@ -953,25 +960,34 @@ class SampleAgent:
             ctx.material = "*"  # Signal to tools that material filter is not applicable
             logger.info("orchestrator: plant-level incident — setting material=* (no filter)")
 
-        # ── Extract expected source from conversation history ─────────────────
-        # If user confirmed expected source (RTI, MRP, IBP, PP/DS, upload) in any turn,
-        # store it in continuity_keys so the classifier can use it.
+        # ── Extract expected source from current query only ──────────────────────
+        # IMPORTANT: Only check the CURRENT user query and single-word user replies.
+        # Do NOT search agent turns in history — agent messages contain "IBP" in
+        # disclaimers and would falsely tag every subsequent query as IBP/RTI.
+        # Only tag expected_source when the user explicitly states the source.
         if not ctx.continuity_keys.get("expected_source"):
             _source_keywords = {
-                "rti": "IBP RTI", "ibp rti": "IBP RTI", "ibp": "IBP RTI",
-                "cpi": "IBP RTI", "integration": "IBP RTI",
-                "mrp": "MRP", "mps": "MRP",
-                "pp/ds": "PP/DS", "ppds": "PP/DS", "cif": "PP/DS",
-                "upload": "upload", "excel": "upload", "manual": "manual",
+                "rti": "IBP RTI", "ibp rti": "IBP RTI",
+                "cpi": "IBP RTI", "rti/cpi": "IBP RTI",
+                "from ibp": "IBP RTI", "via rti": "IBP RTI",
+                "mrp run": "MRP", "from mrp": "MRP", "via mrp": "MRP",
+                "pp/ds": "PP/DS", "from ppds": "PP/DS", "via cif": "PP/DS",
+                "excel upload": "upload", "manual upload": "upload",
+                "manual creation": "manual",
             }
-            # Check current query and recent history for source confirmation
+            # Only check the current user message — not history (history has agent text with "IBP")
             search_text = query.lower()
-            for turn in history[-4:]:
-                search_text += " " + turn.get("content", "").lower()
+            # Also check the last USER reply only (not agent turns)
+            last_user_turns = [t for t in history[-6:] if t.get("role") == "user"]
+            if last_user_turns:
+                last_user = last_user_turns[-1].get("content", "").lower().strip()
+                # Only use a previous user turn if it's a short reply (likely answering "what source?")
+                if len(last_user) < 30:
+                    search_text += " " + last_user
             for kw, source in _source_keywords.items():
                 if kw in search_text:
                     ctx.continuity_keys["expected_source"] = source
-                    logger.info("orchestrator: expected_source detected = %s", source)
+                    logger.info("orchestrator: expected_source detected = %s (from query)", source)
                     break
 
         # Also infer from incident type
