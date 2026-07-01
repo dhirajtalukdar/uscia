@@ -177,7 +177,12 @@ export default function App() {
       if (isApproval) setPending(true);
       updateAgent({ content: report || '⚠️ Empty response', status:'done', requiresApproval:isApproval });
     } catch (e) {
-      updateAgent({ content: e.name==='TimeoutError' ? '⏱️ Timed out.' : `⚠️ ${e.message}`, status:'error' });
+      const msg = e.name === 'TimeoutError'
+        ? '⏱️ Investigation timed out (> 6 min). The agent may still be running — please retry.'
+        : e.message === 'Failed to fetch'
+          ? '⚠️ Connection lost. The dashboard lost contact with the agent. Please retry your message.'
+          : `⚠️ ${e.message}`;
+      updateAgent({ content: msg, status:'error' });
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 80);
