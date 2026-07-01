@@ -159,18 +159,36 @@ def _auto_section(
     missing = [n.system_name for n in graph.nodes if n.status == "MISSING_DATA"]
     is_planner = view_type == "planner"
 
+    # Detect key context for conditional sections
+    is_indeterminate = classification.confidence in ("INDETERMINATE",)
+    expected_source = ctx.continuity_keys.get("expected_source", "").lower()
+    source_is_ibp_rti = any(s in expected_source for s in ("ibp", "rti", "cpi"))
+    ibp_missing = "IBP_SUPPLY" in missing and "SAP_CPI" in missing
+
     if key == "executive_summary":
+        indeterminate_warning = ""
+        if is_indeterminate:
+            indeterminate_warning = (
+                "IMPORTANT: This verdict is INDETERMINATE. "
+                "Critical evidence required for this incident type is unavailable. "
+                "The findings below are based on partial evidence only. "
+            )
         if is_planner:
             return (
+                f"{indeterminate_warning}"
                 f"Investigation of material {ctx.material} at plant {ctx.plant}: "
                 f"{ctx.incident_type}. "
                 f"Root cause: {classification.root_cause} ({classification.confidence} confidence). "
-                f"Evidence collected from {len(available)} of 12 systems."
+                f"Evidence collected from {len(available)} of 16 systems."
+                + (f" IBP and CPI/RTI evidence unavailable — investigation incomplete." if ibp_missing and source_is_ibp_rti else "")
             )
         return (
+            f"{indeterminate_warning}"
             f"Investigation of {ctx.incident_type} for material {ctx.material}, plant {ctx.plant}. "
+            f"Expected source: {expected_source or 'not specified'}. "
             f"Root cause classified as {classification.root_cause} with {classification.confidence} confidence. "
             f"Evidence retrieved from {len(available)} systems; {len(missing)} systems returned MISSING DATA."
+            + (f" NOTE: IBP_SUPPLY and SAP_CPI are unavailable — RTI transfer chain cannot be verified." if ibp_missing and source_is_ibp_rti else "")
         )
 
     if key == "issue_classification":
@@ -202,13 +220,27 @@ def _auto_section(
 
     if key == "missing_data_gaps":
         if is_planner:
+            # When expected source is IBP/RTI, SAP_CPI IS critical — do not filter it out
+            always_critical = {"SAP_CPI", "IBP_SUPPLY"} if source_is_ibp_rti else set()
             gap_systems = [n.system_name for n in graph.nodes if n.status == "MISSING_DATA"
-                           and n.system_name not in {"SAP_CPI", "SAP_PIPO", "CLOUD_ALM"}]
+                           and (n.system_name in always_critical or
+                                n.system_name not in {"SAP_CPI", "SAP_PIPO", "CLOUD_ALM"})]
             if gap_systems:
+                ibp_note = ""
+                if source_is_ibp_rti and ibp_missing:
+                    ibp_note = (
+                        " CRITICAL: The expected order source is IBP/RTI but IBP supply data "
+                        "and CPI/RTI message logs are unavailable — the RTI transfer chain "
+                        "cannot be verified. Configure IBP credentials to complete investigation."
+                    )
                 return (
-                    f"The following systems could not provide data and require manual investigation: "
-                    f"{', '.join(gap_systems)}. "
-                    f"IBP supply data is also unavailable — the IBP→S/4HANA integration chain cannot be fully verified."
+                    f"The following systems could not provide data: {', '.join(gap_systems)}.{ibp_note}"
+                )
+            if source_is_ibp_rti and ibp_missing:
+                return (
+                    "CRITICAL GAP: The expected order source is IBP/RTI but IBP and CPI/RTI "
+                    "evidence are unavailable. This investigation is incomplete. "
+                    "Configure IBP credentials to verify the RTI transfer chain."
                 )
             return "All critical S/4HANA systems provided data. IBP integration layer requires manual verification."
         return "\n".join(classification.missing_findings) or "No missing data gaps identified."

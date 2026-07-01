@@ -181,6 +181,7 @@ def _build_evidence_payload(
             "date_from": ctx.date_from,
             "date_to": ctx.date_to,
             "incident_type": ctx.incident_type,
+            "expected_source": ctx.continuity_keys.get("expected_source", "not specified"),
         },
         "deterministic_classification": {
             "root_cause": classification.root_cause,

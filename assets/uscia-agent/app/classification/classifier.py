@@ -317,12 +317,24 @@ def classify(
         kg_bp_ids = ctx.kg_bp_ids
     rules = _apply_kg_bias(rules, kg_bp_ids)
 
+    # ── Build evidence findings first (needed by IBP/RTI path too) ────────────
+    confirmed: list[str] = []
+    probable: list[str] = []
+    missing: list[str] = []
+
+    for node in payload.nodes:
+        finding = _summarise_node_finding(node)
+        if node.status == "AVAILABLE":
+            confirmed.append(finding)
+        else:
+            missing.append(finding)
+
     # ── Expected source override: when user confirmed IBP/RTI as source ─────────
     # If the conversation context carries an expected_source of IBP or RTI,
-    # and IBP returns MISSING DATA, we cannot run the primary diagnostic path.
-    # Force INCONCLUSIVE rather than firing an MRP/master-data rule that is
-    # irrelevant to the stated investigation path.
-    # This implements Section 8.4 + Section 7 of USCIA_LLM_Functional_Instructions:
+    # and IBP + CPI return MISSING DATA, we cannot run the primary RTI diagnostic.
+    # Return INDETERMINATE with S4HANA evidence included, rather than firing an
+    # MRP/master-data rule that is irrelevant to the stated investigation path.
+    # Implements Section 8.4 + Section 7 of USCIA_LLM_Functional_Instructions.docx:
     # "The verdict depends on the expected source."
     expected_source = ""
     if ctx is not None:
@@ -335,7 +347,7 @@ def classify(
     _ibp_rti_sources = {"ibp", "rti", "ibp rti", "ibp-rti", "cpi", "rti/cpi", "rtl"}
     _source_is_ibp_rti = any(s in expected_source for s in _ibp_rti_sources)
 
-    # Also infer from incident type
+    # Infer from incident type when not explicitly stated
     _rti_incident_types = {"RTI/CPI message failure", "IBP planning job failure"}
     if ctx is not None and ctx.incident_type in _rti_incident_types:
         _source_is_ibp_rti = True
@@ -343,22 +355,25 @@ def classify(
     ibp_missing = _is_missing(payload, "IBP_SUPPLY") and _is_missing(payload, "SAP_CPI")
 
     if _source_is_ibp_rti and ibp_missing:
-        # IBP/RTI path is blocked — return INCONCLUSIVE, not a master-data verdict
+        # IBP/RTI path is blocked — return INDETERMINATE with full S4HANA evidence
         root_cause = "RTI_CPI_MESSAGE_FAILURE"
         confidence = "INDETERMINATE"
         description = (
             "The expected source of this planned order is IBP/RTI. "
-            "However, IBP and CPI/RTI evidence are not available in this deployment "
+            "IBP supply data and CPI/RTI message logs are not available in this deployment "
             "(IBP credentials pending configuration). "
-            "The investigation cannot confirm or deny an RTI transfer failure without "
-            "IBP supply data and CPI message logs. "
-            "S/4HANA MRP/master data checks were run and those results are shown, "
-            "but they are not the primary investigation path for an IBP RTI scenario. "
-            "This verdict is INDETERMINATE — configure IBP credentials to complete investigation."
+            "The RTI transfer chain cannot be verified. "
+            "S/4HANA evidence was collected and is shown below, but it is not the primary "
+            "diagnostic path for an IBP RTI scenario — MRP/master data findings may not "
+            "be the root cause when the expected source is IBP. "
+            "Configure IBP credentials to complete this investigation."
         )
-        confirmed_ibp = [f"[MISSING DATA] IBP_SUPPLY: IBP credentials not configured — cannot verify IBP planning output for this material/location."]
-        confirmed_ibp += [f"[MISSING DATA] SAP_CPI: CPI/RTI message logs not available — cannot verify RTI transfer chain."]
-        confirmed_ibp += confirmed
+        # Prepend IBP/RTI blocker findings to S4HANA evidence
+        ibp_blockers = [
+            "[MISSING DATA] IBP_SUPPLY: IBP credentials not configured — IBP planning output cannot be verified for this material/location.",
+            "[MISSING DATA] SAP_CPI: CPI/RTI message logs unavailable — RTI transfer chain cannot be traced.",
+        ]
+        all_confirmed = ibp_blockers + confirmed
         action_def = _DEFAULT_ACTIONS["RTI_CPI_MESSAGE_FAILURE"]
         action = RemediationAction(
             action_id=str(uuid.uuid4()),
@@ -368,33 +383,26 @@ def classify(
                 "description": action_def["description"],
                 "material": getattr(graph, "_material", ""),
                 "plant": getattr(graph, "_plant", ""),
-                "blocked_reason": "IBP credentials not configured — configure IBP destination to complete RTI investigation",
+                "blocked_reason": "IBP credentials not configured — configure IBP BTP destination to complete RTI investigation",
             },
             requires_approval=True,
             rank=1,
         )
         logger.info(
-            "M4.achieved: root cause classified — category=%s, confidence=%s (IBP/RTI source, IBP MISSING)",
+            "M4.achieved: root cause classified — category=%s, confidence=%s "
+            "(IBP/RTI source + IBP MISSING — INDETERMINATE verdict)",
             root_cause, confidence,
         )
         return Classification(
             root_cause=root_cause,
             confidence=confidence,
-            confirmed_findings=confirmed_ibp,
+            confirmed_findings=all_confirmed,
             probable_findings=probable,
             missing_findings=missing,
             remediation_actions=[action],
             rule_id="RC_IBP_BLOCKED",
             description=description,
         )
-
-    confirmed: list[str] = []
-    probable: list[str] = []
-    missing: list[str] = []
-
-    # Build finding lists from evidence nodes — with actual data values
-    for node in payload.nodes:
-        finding = _summarise_node_finding(node)
         if node.status == "AVAILABLE":
             confirmed.append(finding)
         else:
@@ -443,10 +451,25 @@ def classify(
         )
 
     # ── Evaluate YAML rules in order; apply first match ───────────────────────
+    # RC001/RC002 (RTI/CPI failure) should only fire when expected source is IBP/RTI.
+    # RC007 (IBP planning gap) should only fire when expected source is IBP/RTI.
+    # If expected source is MRP/PP/DS/upload, skip these IBP-specific rules.
+    _ibp_specific_rules = {"RC001", "RC002", "RC007"}
+    _mro_sources = {"mrp", "pp/ds", "ppds", "cif", "upload", "excel", "manual"}
+    source_is_non_ibp = any(s in expected_source for s in _mro_sources)
+
     matched_rule = None
     for rule in rules:
         if rule.get("fallback"):
             continue  # RC008 is evaluated last
+
+        # Skip IBP-specific rules when user's expected source is not IBP/RTI
+        if rule.get("id") in _ibp_specific_rules and source_is_non_ibp:
+            logger.debug(
+                "classifier: skipping rule %s — expected_source=%r is not IBP/RTI",
+                rule.get("id"), expected_source,
+            )
+            continue
 
         # Check required_available
         req_avail = rule.get("required_available", [])

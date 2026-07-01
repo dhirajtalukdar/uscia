@@ -853,7 +853,7 @@ class SampleAgent:
                 await record_outcome(incident_id, action_id, outcome)
                 await update_effectiveness("UNKNOWN", "UNKNOWN", outcome)
                 return AgentResult(
-                    content=f"Outcome recorded: {outcome} for incident {incident_id}. Thank you for the feedback."
+                    content=f"Outcome recorded: {outcome} for incident {incident_id}."
                 )
 
         # ── KG Grounding (pre-M1) ─────────────────────────────────────────────
@@ -897,14 +897,15 @@ class SampleAgent:
         history.append({"role": "user", "content": query})
 
         if action == "ASK" or action == "CONTRADICTION":
-            # Conversational reply — record agent message and return; do not run investigation
-            agent_msg = orchestration["message"] or (
-                "Could you give me a bit more detail so I can investigate accurately?"
-            )
-            history.append({"role": "agent", "content": agent_msg})
-            # Trim history to last 20 turns
-            self._conversations[context_id] = history[-20:]
-            return AgentResult(content=agent_msg, requires_input=True)
+            agent_msg = orchestration["message"]
+            if not agent_msg:
+                # LLM returned ASK/CONTRADICTION with no message — log and treat as INVESTIGATE_LIMITED
+                logger.warning("orchestrator returned %s with empty message — switching to INVESTIGATE_LIMITED", action)
+                action = "INVESTIGATE_LIMITED"
+            else:
+                history.append({"role": "agent", "content": agent_msg})
+                self._conversations[context_id] = history[-20:]
+                return AgentResult(content=agent_msg, requires_input=True)
 
         # Safety net: if orchestrator chose INVESTIGATE but critical context missing,
         # check whether the incident type actually needs material.
@@ -919,7 +920,10 @@ class SampleAgent:
         if ctx.plant == "UNKNOWN" or (_needs_material and ctx.material == "UNKNOWN"):
             # Only force ASK if we haven't already asked this same question this session
             already_asked = any(
-                "material" in turn.get("content", "").lower() and turn.get("role") == "agent"
+                (
+                    "material" in turn.get("content", "").lower() or
+                    "plant" in turn.get("content", "").lower()
+                ) and turn.get("role") == "agent"
                 for turn in history[-6:]
             )
             if already_asked:
