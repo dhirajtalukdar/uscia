@@ -1066,12 +1066,17 @@ class SampleAgent:
         )
 
         # ── Approval gate ─────────────────────────────────────────────────────
-        # Fire the gate only when at least one action is Phase-4-executable
-        # (non-MANUAL_ONLY).  Pure-manual recommendations go straight to report.
+        # Fire only when Phase-4-executable actions exist AND the investigation
+        # is not INDETERMINATE (blocked due to missing credentials).
+        # INDETERMINATE confidence = critical evidence missing, nothing to dispatch.
         executable_actions = [
             a for a in ranked_actions
             if a.action_type in _EXECUTABLE_ACTION_TYPES
+            and not a.action_params.get("blocked_reason")  # skip blocked actions
         ]
+        # Also skip approval gate entirely for INDETERMINATE verdicts
+        if classification.confidence in ("INDETERMINATE",):
+            executable_actions = []
 
         if executable_actions:
             # Store state so the next user turn can resolve the approval

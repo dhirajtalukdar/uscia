@@ -49,7 +49,7 @@ def _build_view(
         f"# USCIA Forensic Investigation Report — {view_type.upper()} VIEW",
         f"## Investigation: {ctx.material} / Plant {ctx.plant}",
         f"## Incident Type: {ctx.incident_type}",
-        f"## Root Cause: {classification.root_cause} [{classification.confidence} confidence]",
+        f"## Root Cause: {'Unable to Determine' if classification.confidence == 'INDETERMINATE' else classification.root_cause} [{classification.confidence} confidence]",
         f"## Incident ID: {incident_id}",
         "---",
     ]

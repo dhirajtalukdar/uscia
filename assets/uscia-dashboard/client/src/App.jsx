@@ -128,6 +128,7 @@ const parsePlant = c => {
 };
 const rcClass = rc => {
   if (!rc) return 'info';
+  if (rc === 'Unable to Determine' || rc.includes('INDETERMINATE')) return 'warning';
   if (rc.includes('NOT_FOUND') || rc.includes('FAILURE') || rc.includes('ERROR')) return 'error';
   if (rc.includes('GAP') || rc.includes('MISMATCH') || rc.includes('BLOCKAGE')) return 'warning';
   return 'info';
@@ -170,6 +171,7 @@ export default function App() {
   const [online, setOnline]         = useState(null);
   const [activeId, setActiveId]     = useState(null);
   const [pendingApproval, setPending] = useState(false);
+  const [approvalUsed, setApprovalUsed] = useState(false);
   const [userName, setUserName]     = useState(FIRST_NAME);
 
   const handleSetName = (name) => {
@@ -250,12 +252,15 @@ export default function App() {
     setMessages([{ id:'w', role:'agent', status:'done', timestamp:new Date(), content:'USCIA_WELCOME' }]);
     setActiveId(null);
     setPending(false);
+    setApprovalUsed(false);
   }, []);
 
   const approve = useCallback(async (yes) => {
+    if (!pendingApproval || approvalUsed) return;
+    setApprovalUsed(true);
     setPending(false);
-    await send(yes ? 'approve' : 'reject');
-  }, [send]);
+    await send(yes ? 'Yes, proceed' : 'No, skip');
+  }, [send, pendingApproval, approvalUsed]);
 
   const latest = latestReport(messages);
   const active = activeId ? messages.find(m => m.id === activeId) : latest;
@@ -425,8 +430,12 @@ export default function App() {
                           Approve to queue for manual execution, or reject to receive the report only.
                         </div>
                         <div className="approval-card-btns">
-                          <button className="btn-approve" onClick={() => approve(true)}>✓ Approve &amp; Proceed</button>
-                          <button className="btn-reject"  onClick={() => approve(false)}>✗ Skip — Show Report Only</button>
+                          <button className="btn-approve" disabled={approvalUsed} onClick={() => approve(true)}>
+                            {approvalUsed ? '✓ Submitted' : '✓ Approve & Proceed'}
+                          </button>
+                          <button className="btn-reject" disabled={approvalUsed} onClick={() => approve(false)}>
+                            {approvalUsed ? '✗ Submitted' : '✗ Skip — Show Report Only'}
+                          </button>
                         </div>
                       </div>
                     </div>
