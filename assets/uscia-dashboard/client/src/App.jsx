@@ -114,7 +114,7 @@ function parseApprovalGate(content) {
   return { mat, plant, rc, conf, action, desc };
 }
 
-
+const parseRC = c => {
   if (!c?.includes('## Investigation:')) return null;
   return c?.match(/##\s+Root Cause:\s*([^\n\[]+)/)?.[1]?.trim() || null;
 };
