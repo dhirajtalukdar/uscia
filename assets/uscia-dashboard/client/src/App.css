@@ -645,3 +645,107 @@ html, body { height: 100%; font-family: var(--font); }
 }
 .welcome-name-btn:hover { background:#7c3aed; }
 .welcome-name-prompt { color:#9CA3AF; font-size:0.85em; }
+
+/* ── Approval Gate Card (chat panel) ─────────────────────────── */
+.msg-approval-card {
+  background: #fff;
+  border: 2px solid #6236FF;
+  border-radius: 14px;
+  padding: 14px 16px;
+  max-width: 440px;
+  box-shadow: 0 2px 12px rgba(98,54,255,0.10);
+}
+.approval-card-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.approval-card-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #6236FF;
+  letter-spacing: 0.03em;
+}
+.approval-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 0.82rem;
+  color: #374151;
+  margin-bottom: 8px;
+}
+.rc-tag-inline {
+  background: #FEE2E2;
+  color: #B91C1C;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.conf-tag {
+  background: #F3F4F6;
+  color: #6B7280;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.approval-card-action {
+  background: #F5F3FF;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.action-type-tag {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #5B21B6;
+  letter-spacing: 0.04em;
+}
+.action-desc {
+  font-size: 0.78rem;
+  color: #4B5563;
+}
+.approval-card-note {
+  font-size: 0.75rem;
+  color: #6B7280;
+  background: #FFFBEB;
+  border-left: 3px solid #F59E0B;
+  padding: 6px 10px;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.approval-card-btns {
+  display: flex;
+  gap: 8px;
+}
+.approval-card-btns .btn-approve {
+  flex: 1;
+  background: #6236FF;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.approval-card-btns .btn-approve:hover { background: #4F1FCC; }
+.approval-card-btns .btn-reject {
+  flex: 1;
+  background: #F3F4F6;
+  color: #374151;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.approval-card-btns .btn-reject:hover { background: #E5E7EB; }

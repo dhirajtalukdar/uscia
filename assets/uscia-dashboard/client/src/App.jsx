@@ -102,9 +102,19 @@ function precedingQuery(msgs, id) {
 }
 
 const fmt = d => d ? (d instanceof Date ? d : new Date(d)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-// Only parse report card fields from actual forensic reports (not approval gate or disclaimer text)
-// Reports contain "## Investigation:" header; approval gate messages do not
-const parseRC = c => {
+// Parse approval gate content into structured fields
+function parseApprovalGate(content) {
+  if (!content) return null;
+  const mat   = content.match(/\*\*Material:\*\*\s*`([^`]+)`/)?.[1] || content.match(/Material[:\s]+`?([A-Z0-9_-]+)`?/)?.[1] || '';
+  const plant = content.match(/\*\*Plant:\*\*\s*`([^`]+)`/)?.[1]   || content.match(/Plant[:\s]+`?([0-9]+)`?/)?.[1] || '';
+  const rc    = content.match(/\*\*Root Cause:\*\*\s*`([^`]+)`/)?.[1] || '';
+  const conf  = content.match(/\[([A-Z]+)\s+confidence\]/)?.[1] || '';
+  const action= content.match(/`(RESTART_BGRFC|REPROCESS_CPI_MESSAGE|RERUN_PPDS_HEURISTIC|RERUN_MRP_SINGLE_ITEM|RERUN_IBP_JOB|MANUAL_ONLY)`/)?.[1] || '';
+  const desc  = content.match(/description=([^,\n]+)/)?.[1]?.trim() || '';
+  return { mat, plant, rc, conf, action, desc };
+}
+
+
   if (!c?.includes('## Investigation:')) return null;
   return c?.match(/##\s+Root Cause:\s*([^\n\[]+)/)?.[1]?.trim() || null;
 };
@@ -323,19 +333,11 @@ export default function App() {
             {active && active.content && active.content !== 'USCIA_WELCOME'
               ? active.status === 'error'
                 ? <div style={{padding:'2rem',color:'#BB0000'}}>{active.content}</div>
-                : <ReportView query={activeQ} content={active.content} timestamp={active.timestamp} view={view} />
+                : !active.content.includes('## Investigation:')
+                  ? <WelcomeScreen userName={userName} onSetName={handleSetName} onPick={t => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50); }} />
+                  : <ReportView query={activeQ} content={active.content} timestamp={active.timestamp} view={view} />
               : <WelcomeScreen userName={userName} onSetName={handleSetName} onPick={t => { setInput(t); setTimeout(() => inputRef.current?.focus(), 50); }} />
             }
-            {pendingApproval && (
-              <div className="approval-gate">
-                <div className="approval-gate-title">⚠️ Action Approval Required</div>
-                <div className="approval-gate-body">Review the recommended actions above. Approve to proceed or reject to cancel.</div>
-                <div className="approval-btns">
-                  <button className="btn-approve" onClick={() => approve(true)}>✓ Approve</button>
-                  <button className="btn-reject"  onClick={() => approve(false)}>✗ Reject</button>
-                </div>
-              </div>
-            )}
           </div>
           <div className="ai-footer">
             <span className="ai-spark">✦</span>
@@ -393,21 +395,38 @@ export default function App() {
                 const isApprovalMsg = msg.content?.includes('Action Approval Required') ||
                                       msg.content?.includes('Do you want to proceed');
 
-                // Approval gate message — render as special card, not truncated text
+                // Approval gate message — render as clean action card in chat
                 if (isApprovalMsg && !isRep) {
+                  const ag = parseApprovalGate(msg.content);
                   return (
                     <div key={msg.id} className="msg-agent">
-                      <div className="msg-agent-bubble msg-approval-gate">
-                        <div className="approval-gate-inline-hdr">
+                      <div className="msg-approval-card">
+                        <div className="approval-card-hdr">
                           <span className="uscia-badge">✦ USCIA</span>
-                          <span style={{fontSize:'0.62rem',color:'#9CA3AF'}}>{fmt(msg.timestamp)}</span>
+                          <span className="approval-card-label">Action Approval Required</span>
+                          <span className="msg-time" style={{marginLeft:'auto'}}>{fmt(msg.timestamp)}</span>
                         </div>
-                        <div className="approval-gate-inline-body">
-                          {msg.content
-                            ?.split('\n')
-                            .filter(l => l.trim() && !l.startsWith('<!--'))
-                            .map((l,i) => <div key={i}>{l}</div>)
-                          }
+                        {ag?.mat && (
+                          <div className="approval-card-meta">
+                            <span><b>Material:</b> {ag.mat}</span>
+                            <span><b>Plant:</b> {ag.plant}</span>
+                            {ag.rc && <span><b>Root Cause:</b> <span className="rc-tag-inline">{ag.rc.replace(/_/g,' ')}</span></span>}
+                            {ag.conf && <span className="conf-tag">{ag.conf}</span>}
+                          </div>
+                        )}
+                        {ag?.action && ag.action !== 'MANUAL_ONLY' && (
+                          <div className="approval-card-action">
+                            <span className="action-type-tag">{ag.action}</span>
+                            {ag.desc && <span className="action-desc">{ag.desc}</span>}
+                          </div>
+                        )}
+                        <div className="approval-card-note">
+                          IBP credentials are not yet configured — this action cannot be auto-dispatched until IBP is connected.
+                          Approve to queue for manual execution, or reject to receive the report only.
+                        </div>
+                        <div className="approval-card-btns">
+                          <button className="btn-approve" onClick={() => approve(true)}>✓ Approve &amp; Proceed</button>
+                          <button className="btn-reject"  onClick={() => approve(false)}>✗ Skip — Show Report Only</button>
                         </div>
                       </div>
                     </div>
